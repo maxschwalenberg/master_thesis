@@ -1,0 +1,32 @@
+images_target_dir: data/images
+excel_files_target_dir: data/labels
+image_betas_dir: data/image_betas
+t_test_results_dir: data/t_test_results
+
+full_brain_data_dir: /media/harveylab/STORAGE1_NA/NSD/full_brain
+stans_thesis_repo_data: /media/Working/stan-thesis/data/
+mask_data_dir: mask
+freesurfer_dir: /media/Working/stan-thesis/data/nsddata/freesurfer
+
+coco_train_json_path: data/coco/instances_train2017.json
+coco_val_json_path: data/coco/instances_val2017.json
+
+nsd_coco_file_path: beginning/nsd_coco.xlsx
+nsd_labeled_subset_path: nsd_coco_labeled.xlsx
+
+nsd_labeled_subset_non_animals: nsd_non_animals.xlsx
+nsd_labeled_subset_animals_humans: nsd_animals_humans.xlsx
+
+nsd_negative_subset: nsd_negative_subset.xlsx
+nsd_positive_subset: nsd_positive_subset.xlsx
+
+face_detection_results_path: data/face_detection/face_detection_result.json
+
+nsd_data_dir: /media/Working/stan-thesis/data
+mask_subdir: mask
+label_subdir: nsddata
+conds_subdir: conditions
+nsd_subdir: NSD
+
+proj_dir: /media/Working/stan-thesis
+betas_subdir: betas
