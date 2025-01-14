@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     # Example usage
     df_to_check_path = os.path.join(
-        config.excel_files_target_dir, "nsd_positive_subset_unchecked.xlsx"
+        config.excel_files_target_dir, "animate_non_face_unchecked.xlsx"
     )
 
     labeled_images = label_images(config, df_to_check_path)
@@ -74,6 +74,6 @@ if __name__ == "__main__":
     ]
 
     labeled_images.to_excel(
-        os.path.join(config.excel_files_target_dir, config.nsd_positive_subset),
+        os.path.join(config.excel_files_target_dir, "animate_non_face.xlsx"),
         index=False,
     )

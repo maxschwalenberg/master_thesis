@@ -13,7 +13,9 @@ logging.basicConfig(
 )
 
 
-def t_test_results_to_mgz(config: Configuration, mode: str, thresholding: float):
+def t_test_results_to_mgz(
+    config: Configuration, mode: str, threshold: float, thresholding: bool = True
+):
     hemis = ["lh", "rh"]
     subs = [f"subj{i:02d}" for i in range(1, 8 + 1)]
     mask_dir = os.path.join(config.stans_thesis_repo_data, config.mask_data_dir)
@@ -47,7 +49,10 @@ def t_test_results_to_mgz(config: Configuration, mode: str, thresholding: float)
             hemisphere_shapes.append(maskdata_long.shape[0])
 
             data_out_file = os.path.join(
-                config.freesurfer_dir, sub, "label", f"{hemi}.t_test_{mode}.mgz"
+                config.freesurfer_dir,
+                sub,
+                "label",
+                f"{hemi}.t_test_{mode}_{str(threshold).replace('.', '_')}.mgz",
             )
 
             data_out = np.zeros(maskdata_long.shape)
@@ -65,8 +70,9 @@ def t_test_results_to_mgz(config: Configuration, mode: str, thresholding: float)
                 else:
                     index = i + hemisphere_shapes[0]
 
-                if t_data[index][0] < thresholding:
-                    continue
+                if threshold:
+                    if t_data[index][0] < threshold:
+                        continue
 
                 if mode == "absolute":
                     data_out[i] = np.abs(t_data[index][0])
@@ -97,4 +103,4 @@ if __name__ == "__main__":
     config = load_config("config.yaml")
 
     for mode in ["absolute", "signed"]:
-        t_test_results_to_mgz(config, mode, 5.0)
+        t_test_results_to_mgz(config, mode, 0.0)

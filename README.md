@@ -40,9 +40,17 @@ This script takes a very long time to run but is already heavily optimized (arou
 
 ## 1.3 T-Testing
 
-Having extracted all the required beta values from the participants for all the specified samples.
+Having extracted all the required beta values from the participants for all the specified samples, t-values are now generated using the two distinct sets.
 
 This script generates the t-testing results.
 [t_testing.py](t_testing.py)
 
 They are later used in matlab for further analysis.
+
+## 1.4 Mask-Creation
+
+Create mask based on the results of the t-tests.
+
+## 1.5
+
+RSA

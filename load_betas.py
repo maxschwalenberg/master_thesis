@@ -46,6 +46,7 @@ def save_betas_single_image_improved(
     overwrite: bool = False,
     mode: str = "averaged",
 ):
+    logging.info(f"Processing subject {subject_id:02d}")
     nsd_dir = os.path.join(config.nsd_data_dir, config.nsd_subdir)
 
     # STEPS:
@@ -90,46 +91,47 @@ def save_betas_single_image_improved(
     # extract indices
     matching_indices = list(matching_trials.index)
 
-    if not overwrite:
+    if overwrite:
+        need_to_process = True
+    else:
         need_to_process = False
-        counter = 0
-        for i, row in tqdm(matching_trials.iterrows(), total=matching_trials.shape[0]):
 
-            nsd = int(row["73KID"]) - 1
+    counter = 0
+    for i, row in tqdm(matching_trials.iterrows(), total=matching_trials.shape[0]):
 
-            if nsd in nsd_ids_positive:
-                coco_id = nsd_coco_df_positive[
-                    nsd_coco_df_positive["nsdId"] == nsd
-                ].iloc[0]["cocoId"]
-                final_target_dir = os.path.join(
-                    target_dir_positive,
-                    f"{coco_id:012d}",
-                    f"subj_{subject_id:02d}",
-                )
-            else:
-                coco_id = nsd_coco_df_negative[
-                    nsd_coco_df_negative["nsdId"] == nsd
-                ].iloc[0]["cocoId"]
-                final_target_dir = os.path.join(
-                    target_dir_negative,
-                    f"{coco_id:012d}",
-                    f"subj_{subject_id:02d}",
-                )
+        nsd = int(row["73KID"]) - 1
 
-            mt_index = matching_indices[counter]
-            numpy_file_path = os.path.join(
-                final_target_dir, f"full.betas_{mt_index}.npy"
+        if nsd in nsd_ids_positive:
+            coco_id = nsd_coco_df_positive[nsd_coco_df_positive["nsdId"] == nsd].iloc[
+                0
+            ]["cocoId"]
+            final_target_dir = os.path.join(
+                target_dir_positive,
+                f"{coco_id:012d}",
+                f"subj_{subject_id:02d}",
             )
-            if not os.path.exists(numpy_file_path):
-                need_to_process = True
-                logging.info(f"need to process {numpy_file_path}")
-                break
+        else:
+            coco_id = nsd_coco_df_negative[nsd_coco_df_negative["nsdId"] == nsd].iloc[
+                0
+            ]["cocoId"]
+            final_target_dir = os.path.join(
+                target_dir_negative,
+                f"{coco_id:012d}",
+                f"subj_{subject_id:02d}",
+            )
 
-            counter += 1
+        mt_index = matching_indices[counter]
+        numpy_file_path = os.path.join(final_target_dir, f"full.betas_{mt_index}.npy")
+        if not os.path.exists(numpy_file_path):
+            need_to_process = True
+            logging.info(f"need to process {numpy_file_path}")
+            break
 
-        if not need_to_process:
-            logging.info("Required files already existent - returning!")
-            return
+        counter += 1
+
+    if not need_to_process:
+        logging.info("Required files already existent - returning!")
+        return
 
     logging.info(f"Load full brain data for subject {subject_id}")
     # path = os.path.join("/media/harveylab/STORAGE1_NA/NSD/full_brain/subj01", "full_betas_subj01.npy")
@@ -194,18 +196,18 @@ def save_betas_single_image_improved(
         )
 
         mt_index = matching_indices[counter]
-        logging.info(f"Extracting for {mt_index=}")
+        # logging.info(f"Extracting for {mt_index=}")
 
         extract = full_brain_data[counter]
 
-        logging.info(f"Extracting finished")
+        # logging.info(f"Extracting finished")
 
         numpy_file_path = os.path.join(final_target_dir, f"full.betas_{mt_index}.npy")
         if os.path.exists(numpy_file_path):
-            logging.info(f"Removing existent beta for {mt_index=}")
+            # logging.info(f"Removing existent beta for {mt_index=}")
             os.remove(numpy_file_path)
 
-        logging.info(f"Saving beta for {mt_index=}")
+        # logging.info(f"Saving beta for {mt_index=}")
 
         np.save(
             numpy_file_path,
@@ -217,8 +219,8 @@ def save_betas_single_image_improved(
 
 
 def load_betas_subset(config: Configuration, overwrite: bool = False):
-    target_image_betas_dir_positive = os.path.join(config.image_betas_dir, "positive")
-    target_image_betas_dir_negative = os.path.join(config.image_betas_dir, "negative")
+    target_image_betas_dir_positive = os.path.join(config.image_betas_dir)
+    target_image_betas_dir_negative = os.path.join(config.image_betas_dir)
 
     positive_subset_excel_path = os.path.join(
         config.excel_files_target_dir, config.nsd_positive_subset
@@ -230,6 +232,9 @@ def load_betas_subset(config: Configuration, overwrite: bool = False):
     # positive_subset = pd.read_excel(positive_subset_excel_path)
     negative_subset = pd.read_excel(negative_subset_excel_path)
     positive_subset = pd.read_excel(positive_subset_excel_path)
+
+    logging.info(f"Positive Set: {len(positive_subset)}")
+    logging.info(f"Negative Set: {len(negative_subset)}")
 
     os.makedirs(target_image_betas_dir_negative, exist_ok=True)
     os.makedirs(target_image_betas_dir_positive, exist_ok=True)

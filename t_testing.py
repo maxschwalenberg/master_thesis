@@ -4,6 +4,7 @@ import glob
 import numpy as np
 from scipy import stats
 from tqdm import tqdm
+import json
 
 import logging
 
@@ -80,12 +81,24 @@ def set_t_testing(config: Configuration, subjs_to_use: list):
         e.split("/")[1].split(".")[0] for e in negative_set_filenames
     ]
 
+    with open(
+        os.path.join(config.excel_files_target_dir, "missing_subjects.json"), "r"
+    ) as f:
+        missing_subjects = json.load(f)
+
     for selected_subj in tqdm(subjects_to_use):
         positive_set_data = []
         negative_set_data = []
 
         for file_name in positive_set_filenames:
-            path = os.path.join(config.image_betas_dir, "positive", file_name)
+            if file_name in missing_subjects:
+                if selected_subj in missing_subjects[file_name]:
+                    logging.info(
+                        f"Skipping {file_name} because it is missing in betas data!"
+                    )
+                    continue
+
+            path = os.path.join(config.image_betas_dir, file_name)
             subj_path = os.path.join(path, f"subj_{selected_subj:02d}")
 
             files = glob.glob(os.path.join(subj_path, "*.npy"))
@@ -96,7 +109,14 @@ def set_t_testing(config: Configuration, subjs_to_use: list):
             positive_set_data.append(data)
 
         for file_name in negative_set_filenames:
-            path = os.path.join(config.image_betas_dir, "negative", file_name)
+            if file_name in missing_subjects:
+                if selected_subj in missing_subjects[file_name]:
+                    logging.info(
+                        f"Skipping {file_name} because it is missing in betas data!"
+                    )
+                    continue
+
+            path = os.path.join(config.image_betas_dir, file_name)
             subj_path = os.path.join(path, f"subj_{selected_subj:02d}")
 
             files = glob.glob(os.path.join(subj_path, "*.npy"))
