@@ -50,7 +50,19 @@ They are later used in matlab for further analysis.
 ## 1.4 Mask-Creation
 
 Create mask based on the results of the t-tests.
+For this, go into Matlab, load the t-testing results and create regions of interests around areas of high statistical significance.
 
-## 1.5
+Now, multiple ROIs should be available, used for further analysis.
 
-RSA
+## 1.5 Create representational sampling space
+
+Creating RDMs among the ROIs - create dissimilarity matrices.
+From this, map into 2d space using MDS.
+
+[Code: rsa/create_rdm.py](rsa/create_rdm.py)
+
+## 1.6 Gaussian Fitting
+
+For each voxel in the ROIs, fit a gaussian to the MDS space. (hypothesizing that single voxels/neurons can capture single features in the MDS space)
+
+[Code: fit_gaussian.py](fit_gaussian.py)

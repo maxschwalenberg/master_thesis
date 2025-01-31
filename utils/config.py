@@ -12,14 +12,14 @@ class Configuration:
     excel_files_target_dir: str
     image_betas_dir: str
     t_test_results_dir: str
-    
-    
+    t_test_roi_dir: str
+    mds_dir: str
+    rdm_dir: str
+
     full_brain_data_dir: str
     stans_thesis_repo_data: str
     mask_data_dir: str
     freesurfer_dir: str
-
-
 
     coco_train_json_path: str
     coco_val_json_path: str
@@ -36,7 +36,6 @@ class Configuration:
 
     face_detection_results_path: str
 
-
     nsd_data_dir: str
     mask_subdir: str
     label_subdir: str
@@ -45,6 +44,11 @@ class Configuration:
 
     proj_dir: str
     betas_subdir: str
+
+    subjects_to_analyze: list
+    rois_to_analyze: dict[str, int]
+
+    gaussian_fit_results_dir: str
 
 
 def load_config(config_file_path: str):

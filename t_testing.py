@@ -103,8 +103,21 @@ def set_t_testing(config: Configuration, subjs_to_use: list):
 
             files = glob.glob(os.path.join(subj_path, "*.npy"))
 
-            file_path = files[0]
-            data = np.load(file_path)
+            # ---------------Average
+            arrays = []
+
+            # Load each file and append the array to the list
+            for file in files:
+                array = np.load(file)
+                is_nan = np.isnan(np.sum(array))
+                assert not is_nan, f"NaN values found in {file}"
+                arrays.append(array)
+
+            # Concatenate all arrays along a new axis
+            concatenated = np.stack(arrays, axis=0)
+
+            # Compute the average across the new axis
+            data = np.mean(concatenated, axis=0)
 
             positive_set_data.append(data)
 
@@ -121,8 +134,21 @@ def set_t_testing(config: Configuration, subjs_to_use: list):
 
             files = glob.glob(os.path.join(subj_path, "*.npy"))
 
-            file_path = files[0]
-            data = np.load(file_path)
+            # ---------------Average
+            arrays = []
+
+            # Load each file and append the array to the list
+            for file in files:
+                array = np.load(file)
+                is_nan = np.isnan(np.sum(array))
+                assert not is_nan, f"NaN values found in {file}"
+                arrays.append(array)
+
+            # Concatenate all arrays along a new axis
+            concatenated = np.stack(arrays, axis=0)
+
+            # Compute the average across the new axis
+            data = np.mean(concatenated, axis=0)
 
             negative_set_data.append(data)
 
@@ -160,6 +186,6 @@ def set_t_testing(config: Configuration, subjs_to_use: list):
 
 
 if __name__ == "__main__":
-    subjects_to_use = list(range(1, 8 + 1))
     config = load_config("config.yaml")
+    subjects_to_use = config.subjects_to_analyze
     set_t_testing(config, subjects_to_use)

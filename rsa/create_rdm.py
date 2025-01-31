@@ -5,8 +5,11 @@ import numpy as np
 from scipy.spatial.distance import pdist
 from previousCode.nsddatapaper_rsa.utils.utils import mds
 import nibabel as nib
+import pandas as pd
+import logging
 
 from utils.config import Configuration, load_config
+from utils.utils import retrieve_stacked_betas
 
 """
 This file takes the betas, the mask and computes
@@ -20,100 +23,108 @@ The RDMs are then stored under the projects directory, and can be access later o
 Then, we used these RDM (or ones previously computed) to get the corresponding MDS 
 
 """
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
-def retrieve_stacked_betas(subj: int, sample: int):
-    path = "data/image_betas"
+def create_rdm(
+    config: Configuration,
+    list_subj,
+    mask_value: int,
+    mode="averaged",
+    sample_to_pick: int = 0,
+):
+    assert mode in ["averaged", "single"]
 
-    data = []
-    image_ids = []
+    logging.info(f"Creating RDM for mode {mode}")
+    logging.info(f"Using positive set: {config.nsd_positive_subset}")
 
-    negatives = []
-    positives = []
-
-    positives_path = os.path.join(path, "positive")
-    negatives_path = os.path.join(path, "negative")
-
-    entries = os.listdir(positives_path)
-    for entry in entries:
-        image_ids.append(entry)
-
-        npy_files = glob.glob(
-            os.path.join(positives_path, entry, f"subj_{subj:02d}", "*.npy")
-        )
-        npy_file = npy_files[sample]
-        extracted_sample = np.load(npy_file)
-
-        data.append(extracted_sample)
-
-    # entries = os.listdir(negatives_path)
-    # for entry in entries:
-    #     image_ids.append(entry)
-
-    #     npy_files = glob.glob(
-    #         os.path.join(negatives_path, entry, f"subj_{subj:02d}", "*.npy")
-    #     )
-    #     for npy_file in npy_files[:1]:
-    #         sample = np.load(npy_file)
-
-    #         data.append(sample)
-
-    return np.stack(data), image_ids
-
-
-def create_rdm(config: Configuration, list_subj, sample_to_pick: int, mode="averaged"):
-
-    targetspace = "nativesurface"
-
-    mask_value = 20
+    if mode == "single":
+        logging.info(f"Picking sample {sample_to_pick}")
 
     for i, sub in enumerate(list_subj):
-        start_sub = time.time()
 
         mask_path_lh = os.path.join(
-            config.freesurfer_dir,
-            f"subj{sub:02d}/label/lh.subj{sub:02d}.ttest_mask.mgz",
+            config.t_test_roi_dir,
+            "face_animate",
+            f"lh.subj{sub:02d}.testrois.mgz",
         )
         mask_path_rh = os.path.join(
-            config.freesurfer_dir,
-            f"subj{sub:02d}/label/rh.subj{sub:02d}.ttest_mask.mgz",
+            config.t_test_roi_dir,
+            "face_animate",
+            f"rh.subj{sub:02d}.testrois.mgz",
         )
 
         mask_lh = nib.load(mask_path_lh).get_fdata().squeeze()
         mask_rh = nib.load(mask_path_rh).get_fdata().squeeze()
 
         mask = np.concatenate((mask_lh, mask_rh)).astype(int)
-        betas, image_ids = retrieve_stacked_betas(sub, sample_to_pick)
+        betas, image_ids = retrieve_stacked_betas(config, sub, mode, sample_to_pick)
 
         betas = np.transpose(betas)
 
-        print(betas.shape)
+        logging.info(f"{betas.shape=}")
 
-        # Create mask for value 20
-        mask20 = mask == mask_value
+        # Create mask for value maskvalue
+        if isinstance(mask_value, int):
+            masked_voxels = mask == mask_value
 
-        rdm_dir = os.path.join("data/rdm_dir", f"subj_{sub:02d}")
+        elif isinstance(mask_value, list):
+            masked_voxels = np.isin(mask, mask_value)
+
+        else:
+            raise ValueError()
+
+        rdm_dir = os.path.join(config.rdm_dir, f"subj_{sub:02d}")
         os.makedirs(rdm_dir, exist_ok=True)
 
-        rdm_file = os.path.join(
-            rdm_dir, f"{sub}_mask20_fullrdm_correlation_sample{sample_to_pick}.npy"
-        )
-        mds_dir = os.path.join("data/mds_dir", f"subj_{sub:02d}")
-        metadata_file = os.path.join("data/rdm_dir", f"subj_{sub:02d}", "metadata.npy")
+        if mode == "averaged":
+            rdm_file = os.path.join(rdm_dir, f"mask_{mask_value}_{mode}_rdm.npy")
+        elif mode == "single":
+            rdm_file = os.path.join(
+                rdm_dir,
+                f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_rdm.npy",
+            )
+
+        mds_dir = os.path.join(config.mds_dir, f"subj_{sub:02d}")
+        metadata_file = os.path.join(config.rdm_dir, f"subj_{sub:02d}", "metadata.npy")
+        logging.info(f"{len(image_ids)=}")
         np.save(metadata_file, image_ids)
 
         os.makedirs(mds_dir, exist_ok=True)
-        mds_file = os.path.join(mds_dir, f"{sub}_mask20_mds_sample{sample_to_pick}.npy")
 
-        print(rdm_file)
-        if not os.path.exists(rdm_file):
+        if mode == "averaged":
+            mds_file = os.path.join(mds_dir, f"mask_{mask_value}_{mode}_mds.npy")
+        elif mode == "single":
+            mds_file = os.path.join(
+                mds_dir,
+                f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_mds.npy",
+            )
+
+        logging.info(f"Saving to ...\nRDM ----> {rdm_file}\nMDS ----> {mds_file}")
+
+        if True:
             # Apply mask20 to betas
-            masked_betas = betas[mask20, :]
+            masked_betas = betas[masked_voxels, :]
+
+            if np.isnan(masked_betas).any():
+                raise ValueError("Found NaNs!!")
 
             # Remove any voxels with NaN values
             good_vox = [np.sum(np.isnan(x)) == 0 for x in masked_betas]
             masked_betas = masked_betas[good_vox, :]
-            print(f"Shape of masked betas for value 20: {masked_betas.shape}")
+
+            if masked_betas.shape[0] == 0:
+                logging.info(f"All voxels have NaN values ... {mask_value=}")
+                return
+                raise ValueError(f"All voxels have NaN values ... {mask_value=}")
+
+            logging.info(
+                f"Shape of masked betas for value {mask_value}: {masked_betas.shape}"
+            )
 
             if np.isnan(masked_betas).any():
                 masked_betas = masked_betas[~np.isnan(masked_betas).any(axis=1), :]
@@ -121,44 +132,24 @@ def create_rdm(config: Configuration, list_subj, sample_to_pick: int, mode="aver
             # Transpose for correlation distance computation
             X = masked_betas.T
 
-            print(f"Masked betas shape: {X.shape}")
+            logging.info(f"Masked betas shape: {X.shape}")
 
-            print(f"\t\tComputing {mode} RDM for mask value 20")
-            start_time = time.time()
             rdm = pdist(X, metric="correlation")
+            logging.info(f"RDM: {rdm.shape}")
 
             if np.any(np.isnan(rdm)):
                 raise ValueError("NaN values found in RDM")
 
-            elapsed_time = time.time() - start_time
-            print(
-                "Elapsed time: ",
-                f'{time.strftime("%H:%M:%S", time.gmtime(elapsed_time))}',
-            )
-
-            print(f"\t\tSaving RDM for mask value 20: {sub}")
             np.save(rdm_file, rdm)
 
-        if not os.path.exists(mds_file):
+        if True:
+
             rdm = np.load(rdm_file, allow_pickle=True).astype(np.float32)
-            print(f"\t\tComputing {mode} MDS for mask value 20")
 
-            start_mds = time.time()
             mds_out = mds(rdm).astype(np.float32)
+            logging.info(f"MDS: {mds_out.shape}")
 
-            elapsed_time = time.time() - start_mds
-            print(
-                f"Time elapsed when computing MDS for {sub}: ",
-                f'{time.strftime("%H:%M:%S", time.gmtime(elapsed_time))}',
-            )
-
-            print(f"\t\tSaving MDS for mask value 20: {sub}")
             np.save(mds_file, mds_out)
-
-        print(
-            f"\tTime elapsed during {sub}: ",
-            f'{time.strftime("%H:%M:%S", time.gmtime(time.time() - start_sub))}',
-        )
 
         # if np.isnan(betas).any():
         #       # SUBJ06 AND SUBJ08 Have NaNs for some  reason: need to remove and replace. Can't do before because of the masking
@@ -305,5 +296,8 @@ def create_rdm(config: Configuration, list_subj, sample_to_pick: int, mode="aver
 # create_rdm(subjects_sessions)
 
 
-config = load_config("config.yaml")
-create_rdm(config, [2], 0)
+if __name__ == "__main__":
+    config = load_config("config.yaml")
+    mask_values = list(config.rois_to_analyze.values())
+    for mask_value in mask_values:
+        create_rdm(config, [1], mask_value, mode="averaged")

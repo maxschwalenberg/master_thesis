@@ -66,7 +66,7 @@ def download_data(config: Configuration):
         os.path.join(config.excel_files_target_dir, config.nsd_coco_file_path)
     )
 
-    df = df[df["amount_participants"] == 8]
+    df = df[(df["amount_participants"] == 8) | (df["subject"] == 1)]
 
     urls = []
     labels = []

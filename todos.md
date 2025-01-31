@@ -12,20 +12,21 @@
   - assign each point original image &check;
   - sanity check &cross;
 
-- fix bug:
+- fix bug: &check;
 
   - creating t-test results for new set (animate-non-face) results in error for third subject (maybe not all files are existent? then issue with load_betas script probably)
   - File "/media/Working/master_thesis/t_testing.py", line 93, in set_t_testing
     file_path = files[0]
     IndexError: list index out of range
 
-- plot with img instead of points (cropped face instead of original image)
+- &check; plot with img instead of points (cropped face instead of original image)
 
-- see how repeatable compare dissimilarity matrices
+- &check; see how repeatable compare dissimilarity matrices
 
 - gaussian function fitting per voxel (how well variance in test set explained)
   - input : positions of MDS
   - fit for every voxel the function
+  - training set: averaged 2 samples if 3 in total
 
 ## Potential Issues
 

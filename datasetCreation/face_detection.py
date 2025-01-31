@@ -72,6 +72,10 @@ def generate_face_detection_results(config: Configuration):
         else:
             continue
 
+        if i % 250 == 0:
+            with open(config.face_detection_results_path, "w") as f:
+                json.dump(detection_results, f, indent=4)
+
     with open(config.face_detection_results_path, "w") as f:
         json.dump(detection_results, f, indent=4)
 
