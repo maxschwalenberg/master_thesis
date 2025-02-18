@@ -31,3 +31,17 @@
 ## Potential Issues
 
 - in the RDM creation: I am neglecting NaNs more or less
+
+### 31.01.25
+
+- Surfclust
+- afni
+
+- sanity checks
+
+  - gaussian fitting -> search within polar space
+  - use gaussian predictions for test data
+
+- generate common plot of response amplitudes and fits
+
+- analyze ROI 7 (FFA)

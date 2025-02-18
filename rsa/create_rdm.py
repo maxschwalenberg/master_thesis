@@ -34,13 +34,16 @@ def create_rdm(
     config: Configuration,
     list_subj,
     mask_value: int,
+    set_to_take: str,
     mode="averaged",
     sample_to_pick: int = 0,
 ):
     assert mode in ["averaged", "single"]
 
     logging.info(f"Creating RDM for mode {mode}")
-    logging.info(f"Using positive set: {config.nsd_positive_subset}")
+    logging.info(
+        f"Using positive set: {os.path.join(set_to_take, config.nsd_positive_subset)}"
+    )
 
     if mode == "single":
         logging.info(f"Picking sample {sample_to_pick}")
@@ -50,12 +53,12 @@ def create_rdm(
         mask_path_lh = os.path.join(
             config.t_test_roi_dir,
             "face_animate",
-            f"lh.subj{sub:02d}.testrois.mgz",
+            f"lh.subj{sub:02d}.testrois_thresholded.mgz",
         )
         mask_path_rh = os.path.join(
             config.t_test_roi_dir,
             "face_animate",
-            f"rh.subj{sub:02d}.testrois.mgz",
+            f"rh.subj{sub:02d}.testrois_thresholded.mgz",
         )
 
         mask_lh = nib.load(mask_path_lh).get_fdata().squeeze()
@@ -63,6 +66,8 @@ def create_rdm(
 
         mask = np.concatenate((mask_lh, mask_rh)).astype(int)
         betas, image_ids = retrieve_stacked_betas(config, sub, mode, sample_to_pick)
+
+        assert not np.isnan(betas).any()
 
         betas = np.transpose(betas)
 
@@ -78,7 +83,7 @@ def create_rdm(
         else:
             raise ValueError()
 
-        rdm_dir = os.path.join(config.rdm_dir, f"subj_{sub:02d}")
+        rdm_dir = os.path.join(config.rdm_dir, set_to_take, f"subj_{sub:02d}")
         os.makedirs(rdm_dir, exist_ok=True)
 
         if mode == "averaged":
@@ -89,8 +94,10 @@ def create_rdm(
                 f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_rdm.npy",
             )
 
-        mds_dir = os.path.join(config.mds_dir, f"subj_{sub:02d}")
-        metadata_file = os.path.join(config.rdm_dir, f"subj_{sub:02d}", "metadata.npy")
+        mds_dir = os.path.join(config.mds_dir, set_to_take, f"subj_{sub:02d}")
+        metadata_file = os.path.join(
+            config.rdm_dir, set_to_take, f"subj_{sub:02d}", "metadata.npy"
+        )
         logging.info(f"{len(image_ids)=}")
         np.save(metadata_file, image_ids)
 
@@ -297,7 +304,9 @@ def create_rdm(
 
 
 if __name__ == "__main__":
+    set_to_take = "shared"
+
     config = load_config("config.yaml")
     mask_values = list(config.rois_to_analyze.values())
     for mask_value in mask_values:
-        create_rdm(config, [1], mask_value, mode="averaged")
+        create_rdm(config, [1], mask_value, set_to_take, mode="averaged")

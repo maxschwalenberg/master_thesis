@@ -314,9 +314,87 @@ def check_labels(config: Configuration):
     print(f"In total: {counter} missing / wrongly labelled")
 
 
+import os
+import json
+import logging
+from collections import defaultdict
+import pandas as pd
+
+
+def load_existing_missing_data_stats(config: Configuration):
+    missing_subjects_json_path = os.path.join(
+        config.excel_files_target_dir, "missing_subjects.json"
+    )
+    missing_nan_information_path = os.path.join(
+        config.excel_files_target_dir, "missing_nan_info.json"
+    )
+
+    file_paths = [
+        os.path.join(
+            config.excel_files_target_dir, "nonanimate", "non_animate_subset.xlsx"
+        ),
+        os.path.join(config.excel_files_target_dir, "faces", "faces_subset.xlsx"),
+        os.path.join(
+            config.excel_files_target_dir, "animate_nonface", "animate_non_face.xlsx"
+        ),
+    ]
+
+    with open(missing_subjects_json_path, "r") as f:
+        missing_subjects = json.load(f)
+
+    with open(missing_nan_information_path, "r") as f:
+        missing_nan_information = json.load(f)
+
+    coco_ids_per_set = []
+    valid_filenames = []
+    for file_path in file_paths:
+        logging.info(f"Processing {os.path.basename(file_path)}")
+        subset = pd.read_excel(file_path)
+
+        coco_id = subset["cocoId"].to_list()
+        coco_id = [f"{e:012d}" for e in coco_id]
+
+        coco_ids_per_set.append(coco_id)
+        valid_filenames += coco_id
+
+    missing_subjects_coco_ids = list(missing_subjects.keys())
+    logging.info(
+        f"Removing {len(missing_subjects_coco_ids)} because of missing subjects...."
+    )
+    valid_filenames = [x for x in valid_filenames if x not in missing_subjects_coco_ids]
+
+    remove_nan_filenames = list(missing_nan_information.keys())
+    logging.info(f"Removing {len(remove_nan_filenames)} because of NaNs....")
+
+    for set_i, file_path in enumerate(file_paths):
+        logging.info(
+            f"{os.path.basename(file_path)}: {len(list(set(remove_nan_filenames) & set(coco_ids_per_set[set_i])))} / {len(remove_nan_filenames)}"
+        )
+
+    for subj in range(1, 9):
+        remove_by_subject = [
+            img
+            for img, subjects in missing_nan_information.items()
+            if str(subj) in subjects
+        ]
+        print()
+        logging.info(
+            f"{subj:02d}: Removing {len(remove_by_subject)} because of NaNs...."
+        )
+        for set_i, file_path in enumerate(file_paths):
+            logging.info(
+                f"{os.path.basename(file_path)}: {len(list(set(remove_by_subject) & set(coco_ids_per_set[set_i])))} / {len(remove_by_subject)}"
+            )
+
+    print("-" * 20)
+
+
 if __name__ == "__main__":
     config = load_config("config.yaml")
 
+    load_existing_missing_data_stats(config)
+
+    quit()
     correct_sets_for_nans_and_missing_samples(
         config,
         [

@@ -45,6 +45,40 @@ def get_coco_image_labels(image_id, coco_instance: COCO):
     return label_names
 
 
+def filter_full_nsd_df(df: pd.DataFrame, config: Configuration):
+    # filter dataframe
+    conditions = []
+
+    if "shared" in config.nsd_samples_subjects_to_check:
+        conditions.append(("amount_participants", [8]))
+
+        # Create a new list without "shared"
+        subjects = [
+            int(s) for s in config.nsd_samples_subjects_to_check if s != "shared"
+        ]
+        conditions.append(("subject", subjects))
+    else:
+        conditions.append(("subject", config.nsd_samples_subjects_to_check))
+
+    # df = df[(df["amount_participants"] == 8) | (df["subject"] == 1)]
+    df = df[
+        df.apply(
+            lambda row: any(row[col] in values for col, values in conditions), axis=1
+        )
+    ]
+
+    return df
+
+
+def extract_subj_nsd_df(df: pd.DataFrame, subj: str):
+    if subj == "shared":
+        df = df[(df["amount_participants"] == 8)]
+    else:
+        df = df[(df["subject"] == int(subj))]
+
+    return df
+
+
 def download_data(config: Configuration):
     logging.info("Processing coco train...")
 
@@ -66,18 +100,21 @@ def download_data(config: Configuration):
         os.path.join(config.excel_files_target_dir, config.nsd_coco_file_path)
     )
 
-    df = df[(df["amount_participants"] == 8) | (df["subject"] == 1)]
+    df = filter_full_nsd_df(df, config)
 
     urls = []
     labels = []
 
-    if os.path.exists(
-        os.path.join(config.excel_files_target_dir, config.nsd_labeled_subset_path)
-    ):
-        need_to_label = False
-    else:
-        need_to_label = True
-        logging.info("Getting Labels")
+    # if os.path.exists(
+    #     os.path.join(config.excel_files_target_dir, config.nsd_labeled_subset_path)
+    # ):
+    #     need_to_label = False
+    # else:
+    #     need_to_label = True
+    #     logging.info("Getting Labels")
+
+    need_to_label = True
+    logging.info("Getting Labels")
 
     # 'http://images.cocodataset.org/train2017/000000391895.jpg'
     for index, row in tqdm(df.iterrows(), total=df.shape[0]):
@@ -113,32 +150,44 @@ def create_data_split(config: Configuration):
         os.path.join(config.excel_files_target_dir, config.nsd_labeled_subset_path)
     )
 
-    # assume that in that case both splits are created
-    if os.path.exists(
-        os.path.join(
-            config.excel_files_target_dir, config.nsd_labeled_subset_animals_humans
+    full_dataset = filter_full_nsd_df(full_dataset, config)
+
+    for nsd_subj_subset in config.nsd_samples_subjects_to_check:
+        filtered_df = extract_subj_nsd_df(full_dataset, nsd_subj_subset)
+
+        # Create subject folder name if necessary
+        if nsd_subj_subset != "shared":
+            nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
+
+        logging.info(f"Distribution for {nsd_subj_subset}...")
+
+        # Create the subdirectory path and make sure it exists
+        subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
+        os.makedirs(subdir_path, exist_ok=True)
+
+        # Create file paths for the two Excel files
+        animals_path = os.path.join(
+            subdir_path, config.nsd_labeled_subset_animals_humans
         )
-    ):
-        logging.info("Splits already exists.")
-        non_animals_df = pd.read_excel(
-            os.path.join(
-                config.excel_files_target_dir, config.nsd_labeled_subset_non_animals
-            )
-        )
-        animals_df = os.path.join(
-            config.excel_files_target_dir, config.nsd_labeled_subset_animals_humans
+        non_animals_path = os.path.join(
+            subdir_path, config.nsd_labeled_subset_non_animals
         )
 
-        logging.info(f"n_samples Non-Animals: {len(non_animals_df)}")
-        logging.info(f"n_samples Person&Animals: {len(animals_df)}")
+        # Assume that if the animals file exists, both splits exist.
+        if os.path.exists(animals_path):
+            logging.info("Splits already exist.")
+            non_animals_df = pd.read_excel(non_animals_path)
+            animals_df = pd.read_excel(animals_path)
 
-        return
+            logging.info(f"n_samples Non-Animals: {len(non_animals_df)}")
+            logging.info(f"n_samples Person & Animals: {len(animals_df)}")
+            continue
 
-    non_animals_df = pd.DataFrame(columns=full_dataset.columns)
-    animals_df = pd.DataFrame(columns=full_dataset.columns)
+        # Create empty DataFrames with the same columns as in full_dataset
+        non_animals_df = pd.DataFrame(columns=filtered_df.columns)
+        animals_df = pd.DataFrame(columns=filtered_df.columns)
 
-    for i, row in full_dataset.iterrows():
-        labels = row["labels"]
+        # Define labels that indicate an animal or a person is present
         animal_or_person_labels = [
             "person",
             "bird",
@@ -152,35 +201,31 @@ def create_data_split(config: Configuration):
             "zebra",
             "giraffe",
         ]
-        # teddy bear?
 
-        has_animal_or_person_label = any(
-            label in labels for label in animal_or_person_labels
-        )
-
-        if has_animal_or_person_label == 0:
-            non_animals_df = pd.concat(
-                [non_animals_df, pd.DataFrame([row])], ignore_index=True
+        # Iterate over each row and append it to the correct DataFrame
+        for i, row in filtered_df.iterrows():
+            labels = row["labels"]
+            has_animal_or_person_label = any(
+                label in labels for label in animal_or_person_labels
             )
-        else:
-            animals_df = pd.concat([animals_df, pd.DataFrame([row])], ignore_index=True)
+            if not has_animal_or_person_label:
+                non_animals_df = pd.concat(
+                    [non_animals_df, pd.DataFrame([row])], ignore_index=True
+                )
+            else:
+                animals_df = pd.concat(
+                    [animals_df, pd.DataFrame([row])], ignore_index=True
+                )
 
-    logging.info(f"n_samples Non-Animals: {len(non_animals_df)}")
-    logging.info(f"n_samples Person&Animals: {len(animals_df)}")
+        logging.info(f"n_samples Non-Animals: {len(non_animals_df)}")
+        logging.info(f"n_samples Person & Animals: {len(animals_df)}")
 
-    animals_df.to_excel(
-        os.path.join(
-            config.excel_files_target_dir, config.nsd_labeled_subset_animals_humans
-        )
-    )
-    non_animals_df.to_excel(
-        os.path.join(
-            config.excel_files_target_dir, config.nsd_labeled_subset_non_animals
-        )
-    )
+        # Write the DataFrames to Excel files
+        animals_df.to_excel(animals_path)
+        non_animals_df.to_excel(non_animals_path)
 
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
-    download_data(config)
+    # download_data(config)
     create_data_split(config)

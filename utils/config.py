@@ -8,6 +8,7 @@ class Configuration:
     Dataclass that loads configuration parameters from a YAML file.
     """
 
+    # specifying subfolder names in data dir
     images_target_dir: str
     excel_files_target_dir: str
     image_betas_dir: str
@@ -50,10 +51,27 @@ class Configuration:
 
     gaussian_fit_results_dir: str
 
+    # for dataset creation
+
+    nsd_samples_subjects_to_check: list[str]  # ['shared', '1', ..., '8']
+
 
 def load_config(config_file_path: str):
 
     with open(config_file_path, "r") as f:
         config_data = yaml.safe_load(f)
 
-    return Configuration(**config_data)
+    config = Configuration(**config_data)
+
+    # assert config is correct
+    assert (
+        len(
+            list(
+                set(config.nsd_samples_subjects_to_check)
+                - set(["shared", "1", "2", "3", "4", "5", "6", "7", "8"])
+            )
+        )
+        == 0
+    )
+
+    return config
