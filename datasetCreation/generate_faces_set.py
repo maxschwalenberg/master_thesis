@@ -25,7 +25,12 @@ def generate_positive_set(config: Configuration):
         # Create the subdirectory path and make sure it exists
         subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
 
-        os.makedirs(os.path.join(subdir_path, "faces"), exist_ok=True)
+        os.makedirs(
+            os.path.dirname(
+                os.path.join(subdir_path, config.subset_animate_face_unchecked)
+            ),
+            exist_ok=True,
+        )
 
         face_detection_results_path = os.path.join(
             subdir_path, config.face_detection_results_path
@@ -34,7 +39,7 @@ def generate_positive_set(config: Configuration):
             detection_results = json.load(f)
 
         humans_subset_excel = pd.read_excel(
-            os.path.join(subdir_path, config.nsd_labeled_subset_animals_humans)
+            os.path.join(subdir_path, config.subset_animate)
         )
 
         total_image_area = 640 * 640
@@ -58,7 +63,7 @@ def generate_positive_set(config: Configuration):
                 area = (b[2] - b[0]) * (b[3] - b[1])
                 area_fraction = round((area / total_image_area), 2)
 
-                if area_fraction > 0.03 and r[2] == 1 and r[3] == 1:
+                if area_fraction > 0.02 and r[2] == 1 and r[3] == 1:
                     bbox_image_areas.append((area_fraction, r[1], r[2], r[3]))
 
         sorted_areas = sorted(bbox_image_areas, key=lambda x: x[0], reverse=True)
@@ -94,11 +99,7 @@ def generate_positive_set(config: Configuration):
             :, ~result_df.columns.str.contains("Unnamed", case=False, na=False)
         ]
         result_df.to_excel(
-            os.path.join(
-                subdir_path,
-                "faces",
-                "faces.xlsx".split(".")[0] + "_unchecked.xlsx",
-            )
+            os.path.join(subdir_path, config.subset_animate_face_unchecked)
         )
 
 
@@ -112,8 +113,6 @@ def generate_animate_non_face(config: Configuration):
         # Create the subdirectory path and make sure it exists
         subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
 
-        os.makedirs(os.path.join(subdir_path, "animate_nonface"), exist_ok=True)
-
         face_detection_results_path = os.path.join(
             subdir_path, config.face_detection_results_path
         )
@@ -121,7 +120,7 @@ def generate_animate_non_face(config: Configuration):
             detection_results = json.load(f)
 
         humans_subset_excel = pd.read_excel(
-            os.path.join(subdir_path, config.nsd_labeled_subset_animals_humans)
+            os.path.join(subdir_path, config.subset_animate)
         )
 
         total_image_area = 640 * 640
@@ -170,13 +169,18 @@ def generate_animate_non_face(config: Configuration):
             :, ~result_df.columns.str.contains("Unnamed", case=False, na=False)
         ]
 
-        final_path = os.path.join(
-            subdir_path,
-            "animate_nonface",
-            "animate_non_face" + "_unchecked.xlsx",
+        os.makedirs(
+            os.path.dirname(
+                os.path.join(subdir_path, config.subset_animate_non_face_unchecked)
+            ),
+            exist_ok=True,
         )
-        logging.info(f"Saving to {final_path}")
-        result_df.to_excel(final_path)
+        logging.info(
+            f"Saving to {os.path.join(subdir_path, config.subset_animate_non_face_unchecked)}"
+        )
+        result_df.to_excel(
+            os.path.join(subdir_path, config.subset_animate_non_face_unchecked)
+        )
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ config = load_config("config.yaml")
 IMAGE_FOLDER = config.images_target_dir
 
 # List image files (filtering for common image extensions)
-df = pd.read_excel("data/labels/shared/faces/faces_unchecked.xlsx")
+df = pd.read_excel("data/labels/subj_01/faces/faces_final.xlsx")
 image_files = [e.split("/")[1] for e in df["file_name"]]
 # image_files = sorted(
 #     [

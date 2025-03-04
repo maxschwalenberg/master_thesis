@@ -26,27 +26,6 @@ logging.basicConfig(
 )
 
 
-def gaussian_2d_curve(independent, x0, y0, sigma, slope, intercept):
-    X, Y = independent
-    x = X - x0
-    y = Y - y0
-    return np.exp(-0.5 * ((x / sigma) ** 2 + (y / sigma) ** 2)) * slope + intercept
-
-
-def gaussian_2d_curve_pol(independent, ecc, pol, sigma, slope, intercept):
-    X, Y = independent
-    x0, y0 = pol2cart(ecc, pol)
-    x = X - x0
-    y = Y - y0
-    return np.exp(-0.5 * ((x / sigma) ** 2 + (y / sigma) ** 2)) * slope + intercept
-
-
-def pol2cart(rho, phi):
-    x = rho * np.cos(phi)
-    y = rho * np.sin(phi)
-    return (x, y)
-
-
 params = {
     "random": True,
     "initial": (np.array([-0.4, -0.4, 0.01, 0.1, -2]), np.array([0.4, 0.4, 2, 10, 2])),
@@ -81,97 +60,6 @@ def find_positive_percentile(series):
     return round(percentile, 2)  # Round for readability
 
 
-# ------------------------------------------------------------------
-# 1) Define an isotropic 2D Gaussian in Cartesian space
-#    (center = (x0, y0), single spread = sigma for both x and y)
-# ------------------------------------------------------------------
-def gaussian_2d_cartesian_isotropic(coords, A, x0, y0, sigma):
-    """
-    coords: tuple of (x, y) arrays
-    A:       amplitude (peak value)
-    x0, y0:  center of the Gaussian in Cartesian coordinates
-    sigma:   standard deviation (equal in x and y)
-    """
-    x, y = coords
-    exponent = -((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma**2)
-    return A * np.exp(exponent)
-
-
-# ------------------------------------------------------------------
-# 2) Fit the isotropic 2D Gaussian using curve_fit
-# ------------------------------------------------------------------
-def fit_cartesian_gaussian_isotropic(x_vals, y_vals, target_values):
-    """
-    x_vals, y_vals: 1D arrays of sample coordinates
-    target_values:   1D array of values at (x_vals, y_vals)
-    Returns:
-      popt: optimized parameters [A, x0, y0, sigma]
-    """
-    # Initial guess:
-    #   - Amplitude: max(target_values)
-    #   - Center: mean(x), mean(y)
-    #   - Spread: use the average of the standard deviations in x and y (or one of them)
-    A0 = np.max(target_values)
-    x0 = np.mean(x_vals)
-    y0 = np.mean(y_vals)
-    sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
-
-    # initial_guess = [np.random.uniform(0.1, A0), x0, y0, sigma0]
-    initial_guess = [
-        np.random.uniform(0.1, A0),
-        np.random.uniform(-1, 1),
-        np.random.uniform(-1, 1),
-        sigma0,
-    ]
-
-    # print(initial_guess)
-
-    # Set bounds: amplitude >= 0, sigma > 0
-    lower_bounds = [0, -1.1, -1.1, 0.0001]
-    upper_bounds = [np.inf, 1.1, 1.1, 100]
-
-    attempt = 1
-    solved = False
-    while attempt <= 3 and not solved:
-        try:
-            popt, pcov = curve_fit(
-                gaussian_2d_cartesian_isotropic,
-                (x_vals, y_vals),
-                target_values,
-                p0=initial_guess,
-                bounds=(lower_bounds, upper_bounds),
-                # maxfev=2000,
-            )
-            solved = True
-        except:
-            if attempt > 2:
-                print(f"{attempt=}")
-
-            attempt += 1
-
-    if solved:
-        return popt, solved
-    else:
-        popt = np.mean(target_values), 0, 0, 100
-        # raise RuntimeError
-        return popt, solved
-
-
-# ------------------------------------------------------------------
-# 3) Compute Variance Explained (R²)
-# ------------------------------------------------------------------
-def variance_explained(y_true, y_pred):
-    """
-    Returns R^2 = 1 - (SS_res / SS_tot).
-    In the worst-case scenario the Gaussian can mimic a constant (the mean),
-    so the model will never be worse than predicting the mean.
-    """
-    ss_total = np.sum((y_true - np.mean(y_true)) ** 2)  # total variance
-    ss_residual = np.sum((y_true - y_pred) ** 2)  # residual variance
-    r_squared = 1 - (ss_residual / ss_total)
-    return r_squared
-
-
 class Gaussian2DFitter:
     def __init__(self, use_polar: bool = False):
         """
@@ -186,30 +74,35 @@ class Gaussian2DFitter:
         self.solved = False
 
     @staticmethod
-    def gaussian_2d_cartesian(coords, A, x0, y0, sigma):
+    def gaussian_2d_cartesian(coords, A, x0, y0, sigma, intercept):
         """
-        Isotropic 2D Gaussian in Cartesian coordinates.
+        Isotropic 2D Gaussian in Cartesian coordinates with an intercept.
 
         Parameters:
-          coords: tuple of (x, y) arrays
-          A: amplitude
-          x0, y0: center of the Gaussian
-          sigma: standard deviation
+        coords: tuple of (x, y) arrays
+        A: amplitude
+        x0, y0: center of the Gaussian
+        sigma: standard deviation
+        intercept: constant offset added to the Gaussian
+
+        Returns:
+        The evaluated Gaussian function with an intercept.
         """
         x, y = coords
         exponent = -(((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma**2))
-        return A * np.exp(exponent)
+        return A * np.exp(exponent) + intercept
 
     @staticmethod
-    def gaussian_2d_polar(coords, A, r0, theta0, sigma):
+    def gaussian_2d_polar(coords, A, r0, theta0, sigma, intercept):
         """
-        Isotropic 2D Gaussian in polar coordinates.
+        Isotropic 2D Gaussian in polar coordinates with an intercept term.
 
         Parameters:
-          coords: tuple of (r, theta) arrays
-          A: amplitude
-          r0, theta0: center in polar coordinates
-          sigma: standard deviation
+        coords: tuple of (r, theta) arrays
+        A: amplitude
+        r0, theta0: center in polar coordinates
+        sigma: standard deviation
+        intercept: constant offset added to the Gaussian
 
         The distance between a point (r, theta) and the center (r0, theta0)
         is computed via the law of cosines:
@@ -219,90 +112,230 @@ class Gaussian2DFitter:
         r, theta = coords
         d = np.sqrt(r**2 + r0**2 - 2 * r * r0 * np.cos(theta - theta0))
         exponent = -(d**2) / (2 * sigma**2)
-        return A * np.exp(exponent)
+        return A * np.exp(exponent) + intercept
+
+    # def fit(self, x_vals, y_vals, target_values):
+    #     """
+    #     Fit the isotropic 2D Gaussian to the provided data.
+
+    #     Parameters:
+    #       x_vals, y_vals: 1D arrays of sample coordinates
+    #       target_values: 1D array of values at (x_vals, y_vals)
+
+    #     Returns:
+    #       (popt, solved) where popt is the optimized parameters [A, x0, y0, sigma]
+    #       and solved is a boolean indicating whether the fit succeeded.
+    #     """
+    #     A0 = np.max(target_values)
+    #     attempt = 1
+    #     solved = False
+
+    #     if self.use_polar:
+    #         # Convert the Cartesian samples to polar coordinates.
+    #         r_samples = np.sqrt(x_vals**2 + y_vals**2)
+    #         theta_samples = np.arctan2(y_vals, x_vals)
+    #         sigma0 = max(np.std(r_samples), 1e-6)
+    #         # Set bounds: amplitude >= 0, r0 in [0,1] (unit circle), theta0 in [-pi, pi], sigma > 0.
+    #         lower_bounds = [-10, 0, -np.pi, 1e-6]
+    #         upper_bounds = [10, 1.0, np.pi, 100]
+    #     else:
+    #         sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
+    #         # Bounds for Cartesian fit: amplitude >= 0, x0,y0 within [-1, 1], sigma > 0.
+    #         lower_bounds = [-10, -1, -1, 1e-6]
+    #         upper_bounds = [10, 1, 1, 100]
+
+    #     while attempt <= 3 and not solved:
+    #         try:
+    #             if self.use_polar:
+    #                 # Initial guess for polar parameters: [A, r0, theta0, sigma]
+    #                 initial_guess = [
+    #                     np.random.uniform(0.1, A0),
+    #                     np.random.uniform(0, 1),
+    #                     np.random.uniform(-np.pi, np.pi),
+    #                     sigma0,
+    #                 ]
+    #                 # Fit using the polar version of the Gaussian.
+    #                 popt, pcov = curve_fit(
+    #                     Gaussian2DFitter.gaussian_2d_polar,
+    #                     (r_samples, theta_samples),
+    #                     target_values,
+    #                     p0=initial_guess,
+    #                     bounds=(lower_bounds, upper_bounds),
+    #                     maxfev=2000,
+    #                 )
+    #                 # Convert the polar center to Cartesian coordinates.
+    #                 A, r0, theta0, sigma = popt
+    #                 x0 = r0 * np.cos(theta0)
+    #                 y0 = r0 * np.sin(theta0)
+    #                 self.params = [A.item(), x0.item(), y0.item(), sigma.item()]
+    #             else:
+    #                 # Initial guess for Cartesian parameters: [A, x0, y0, sigma]
+    #                 initial_guess = [
+    #                     np.random.uniform(0.1, A0),
+    #                     np.random.uniform(-1, 1),
+    #                     np.random.uniform(-1, 1),
+    #                     sigma0,
+    #                 ]
+    #                 popt, pcov = curve_fit(
+    #                     Gaussian2DFitter.gaussian_2d_cartesian,
+    #                     (x_vals, y_vals),
+    #                     target_values,
+    #                     p0=initial_guess,
+    #                     bounds=(lower_bounds, upper_bounds),
+    #                     maxfev=2000,
+    #                 )
+    #                 self.params = popt
+    #             solved = True
+    #         except Exception as e:
+    #             attempt += 1
+    #             if attempt > 3:
+    #                 print("Fitting failed after 3 attempts:", e)
+    #     self.solved = solved
+
+    #     # In case of failure, return a fallback set of parameters.
+    #     if not solved:
+    #         self.params = [np.mean(target_values).item(), 0, 0, 100]
+    #     return self.params, solved
 
     def fit(self, x_vals, y_vals, target_values):
         """
-        Fit the isotropic 2D Gaussian to the provided data.
+        Fit the isotropic 2D Gaussian to the provided data, running multiple fits
+        and selecting the best one (based on variance explained). If consecutive fits
+        yield almost the same result, the loop stops early to save computation.
+        The model now includes an intercept term.
 
         Parameters:
-          x_vals, y_vals: 1D arrays of sample coordinates
-          target_values: 1D array of values at (x_vals, y_vals)
+        x_vals, y_vals: 1D arrays of sample coordinates (Cartesian)
+        target_values: 1D array of values at (x_vals, y_vals)
 
         Returns:
-          (popt, solved) where popt is the optimized parameters [A, x0, y0, sigma]
-          and solved is a boolean indicating whether the fit succeeded.
+        (popt, solved) where popt is the optimized parameters
+            [A, x0, y0, sigma, intercept]  (for Cartesian) or
+            [A, r0, theta0, sigma, intercept] (converted to Cartesian as [A, x0, y0, sigma, intercept])
+        and solved is a boolean indicating whether the fit succeeded.
         """
-        A0 = np.max(target_values)
-        attempt = 1
-        solved = False
+        max_outer_attempts = 4  # Maximum number of independent fit attempts
+        convergence_tol = 0.02  # Tolerance for considering two fits "almost the same"
+        stable_threshold = (
+            2  # Number of consecutive fits with nearly identical R² to stop early
+        )
 
-        if self.use_polar:
-            # Convert the Cartesian samples to polar coordinates.
-            r_samples = np.sqrt(x_vals**2 + y_vals**2)
-            theta_samples = np.arctan2(y_vals, x_vals)
-            sigma0 = max(np.std(r_samples), 1e-6)
-            # Set bounds: amplitude >= 0, r0 in [0,1] (unit circle), theta0 in [-pi, pi], sigma > 0.
-            lower_bounds = [0, 0, -np.pi, 1e-6]
-            upper_bounds = [np.inf, 1.0, np.pi, 100]
-        else:
-            sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
-            # Bounds for Cartesian fit: amplitude >= 0, x0,y0 within [-1.1, 1.1], sigma > 0.
-            lower_bounds = [0, -1.1, -1.1, 1e-6]
-            upper_bounds = [np.inf, 1.1, 1.1, 100]
+        best_r2 = -np.inf  # Initialize best variance explained
+        best_params = None  # To store the best parameters found
+        consecutive_stable = 0  # Counter for consecutive stable fits
+        overall_solved = False  # Tracks if any fit succeeded
 
-        while attempt <= 3 and not solved:
-            try:
-                if self.use_polar:
-                    # Initial guess for polar parameters: [A, r0, theta0, sigma]
-                    initial_guess = [
-                        np.random.uniform(0.1, A0),
-                        np.random.uniform(0, 1),
-                        np.random.uniform(-np.pi, np.pi),
-                        sigma0,
-                    ]
-                    # Fit using the polar version of the Gaussian.
-                    popt, pcov = curve_fit(
-                        Gaussian2DFitter.gaussian_2d_polar,
-                        (r_samples, theta_samples),
-                        target_values,
-                        p0=initial_guess,
-                        bounds=(lower_bounds, upper_bounds),
-                        maxfev=2000,
-                    )
-                    # Convert the polar center to Cartesian coordinates.
-                    A, r0, theta0, sigma = popt
-                    x0 = r0 * np.cos(theta0)
-                    y0 = r0 * np.sin(theta0)
-                    self.params = [A.item(), x0.item(), y0.item(), sigma.item()]
+        for fit_iter in range(max_outer_attempts):
+            # --- Prepare initial guess and bounds based on coordinate system ---
+            A0 = np.max(target_values)
+            if self.use_polar:
+                # Convert the Cartesian samples to polar coordinates.
+                r_samples = np.sqrt(x_vals**2 + y_vals**2)
+                theta_samples = np.arctan2(y_vals, x_vals)
+                sigma0 = max(np.std(r_samples), 1e-6)
+                # Bounds: amplitude in [-10,10], r0 in [0,1], theta0 in [-pi,pi], sigma > 0, intercept in [-10,10].
+                lower_bounds = [0, 0, -np.pi, 1e-6, -np.inf]
+                upper_bounds = [np.inf, 1.0, np.pi, 100, np.inf]
+            else:
+                sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
+                # Bounds for Cartesian fit: amplitude in [-10,10], x0,y0 within [-1, 1], sigma > 0, intercept in [-10,10].
+                lower_bounds = [0, -1, -1, 1e-6, -np.inf]
+                upper_bounds = [np.inf, 1, 1, 100, np.inf]
+
+            # --- Inner loop: try up to 3 times to get a successful fit ---
+            attempt = 1
+            solved = False
+            candidate_params = None
+            while attempt <= 3 and not solved:
+                try:
+                    if self.use_polar:
+                        # Initial guess for polar parameters: [A, r0, theta0, sigma, intercept]
+                        initial_guess = [
+                            np.random.uniform(0.1, A0),
+                            np.random.uniform(0, 1),
+                            np.random.uniform(-np.pi, np.pi),
+                            sigma0,
+                            np.random.uniform(-1, 1),
+                        ]
+                        popt, pcov = curve_fit(
+                            Gaussian2DFitter.gaussian_2d_polar,
+                            (r_samples, theta_samples),
+                            target_values,
+                            p0=initial_guess,
+                            bounds=(lower_bounds, upper_bounds),
+                            maxfev=2000,
+                        )
+                        # Convert the polar center to Cartesian coordinates.
+                        A, r0, theta0, sigma, intercept = popt
+                        x0 = r0 * np.cos(theta0)
+                        y0 = r0 * np.sin(theta0)
+                        candidate_params = [
+                            A.item(),
+                            x0.item(),
+                            y0.item(),
+                            sigma.item(),
+                            intercept.item(),
+                        ]
+                    else:
+                        # Initial guess for Cartesian parameters: [A, x0, y0, sigma, intercept]
+                        initial_guess = [
+                            np.random.uniform(0.1, A0),
+                            np.random.uniform(-1, 1),
+                            np.random.uniform(-1, 1),
+                            sigma0,
+                            np.random.uniform(-1, 1),
+                        ]
+                        popt, pcov = curve_fit(
+                            Gaussian2DFitter.gaussian_2d_cartesian,
+                            (x_vals, y_vals),
+                            target_values,
+                            p0=initial_guess,
+                            bounds=(lower_bounds, upper_bounds),
+                            maxfev=2000,
+                        )
+                        candidate_params = popt
+                    solved = True
+                except Exception as e:
+                    attempt += 1
+                    if attempt > 3:
+                        print(
+                            f"Fitting failed after 3 attempts in outer iteration {fit_iter+1}: {e}"
+                        )
+
+            # In case all three attempts fail, use a fallback set of parameters.
+            if not solved:
+                candidate_params = [np.mean(target_values).item(), 0, 0, 100, 0]
+
+            # Temporarily set self.params to candidate_params so we can compute R².
+            saved_params = self.params
+            self.params = candidate_params
+            candidate_r2 = self.variance_explained(
+                (x_vals, y_vals), target_values, input_polar=False
+            )
+            # Restore self.params (we'll update it later if this candidate is the best)
+            self.params = saved_params
+
+            # --- Check if this candidate is the best so far ---
+            if candidate_r2 > best_r2:
+                best_r2 = candidate_r2
+                best_params = candidate_params
+                overall_solved = solved
+                consecutive_stable = 0
+            else:
+                # If the new candidate's performance is nearly identical, increment counter.
+                if abs(candidate_r2 - best_r2) < convergence_tol:
+                    consecutive_stable += 1
                 else:
-                    # Initial guess for Cartesian parameters: [A, x0, y0, sigma]
-                    initial_guess = [
-                        np.random.uniform(0.1, A0),
-                        np.random.uniform(-1, 1),
-                        np.random.uniform(-1, 1),
-                        sigma0,
-                    ]
-                    popt, pcov = curve_fit(
-                        Gaussian2DFitter.gaussian_2d_cartesian,
-                        (x_vals, y_vals),
-                        target_values,
-                        p0=initial_guess,
-                        bounds=(lower_bounds, upper_bounds),
-                        maxfev=2000,
-                    )
-                    self.params = popt
-                solved = True
-            except Exception as e:
-                attempt += 1
-                if attempt > 3:
-                    print("Fitting failed after 3 attempts:", e)
-        self.solved = solved
+                    consecutive_stable = 0
 
-        # In case of failure, return a fallback set of parameters.
-        if not solved:
-            self.params = [np.mean(target_values).item(), 0, 0, 100]
-        return self.params, solved
+            # If we have a couple of consecutive stable fits, stop early.
+            if consecutive_stable >= stable_threshold:
+                break
+
+        # Store the best found parameters.
+        self.params = best_params
+        self.solved = overall_solved
+        return self.params, self.solved
 
     def predict(self, coords, input_polar: bool = False):
         """
@@ -324,7 +357,7 @@ class Gaussian2DFitter:
         if self.params is None:
             raise ValueError("Model has not been successfully fitted yet.")
 
-        A, x0, y0, sigma = self.params
+        A, x0, y0, sigma, intercept = self.params
 
         # Convert input coordinates to Cartesian if they are provided in polar form.
         if input_polar:
@@ -336,7 +369,7 @@ class Gaussian2DFitter:
             coords_cartesian = coords
 
         return Gaussian2DFitter.gaussian_2d_cartesian(
-            coords_cartesian, A, x0, y0, sigma
+            coords_cartesian, A, x0, y0, sigma, intercept
         )
 
     def plot_fit_cartesian(self, x_samples, y_samples, target_values):
@@ -350,7 +383,7 @@ class Gaussian2DFitter:
         if not self.solved or self.params is None:
             raise ValueError("Model has not been successfully fitted yet.")
 
-        popt = self.params  # [A, x0, y0, sigma]
+        popt = self.params  # [A, x0, y0, sigma, sigma]
 
         # Create a meshgrid covering the range of your data
         x_min, x_max = np.min(x_samples), np.max(x_samples)
@@ -402,10 +435,76 @@ class Gaussian2DFitter:
           r_squared: A float representing the proportion of variance explained by the model.
         """
         predictions = self.predict(coords, input_polar=input_polar)
+
+        variance = self.compute_variance(predictions, target_values)
+
+        return variance
+
+    @staticmethod
+    def compute_variance(predictions, target_values):
         ss_res = np.sum((target_values - predictions) ** 2)
         ss_tot = np.sum((target_values - np.mean(target_values)) ** 2)
         r_squared = 1 - ss_res / ss_tot
         return r_squared
+
+    @staticmethod
+    def rescale(train, test):
+        """
+        Input
+        -------
+        train: 1D array of length n, to rescale
+        test : 1D array of length n, target to rescale to
+
+        Output
+        --------
+        new_train: 1D array of length n, rescale train array
+
+        Rescale the train array to the test array. Linear rescale using pseudoinverse
+        """
+        if len(train.shape) == 1:
+            train = np.array([train])  # add a dimension for concat
+        # print(train.shape)
+        train_ones = np.concatenate(
+            (train, np.ones((train.shape[0], train.shape[1])))
+        ).T
+        scale = np.linalg.pinv(train_ones) @ test.T
+
+        new_train = train_ones @ scale  # make
+        return new_train.T.squeeze(), scale
+
+    def compute_noise_ceiling(self, betas_train_voxel, betas_test_voxel):
+        rescaled_train_betas, _ = self.rescale(betas_train_voxel, betas_test_voxel)
+
+        noise_ceiling = self.compute_variance(rescaled_train_betas, betas_test_voxel)
+
+        return noise_ceiling
+
+    def variance_explained_noise_ceiling(
+        self, coords, betas_test_voxel, noise_ceiling: float
+    ):
+        # results = []
+        # noise_ceilling_all_vox = np.zeros(betas_train.shape[1])
+        # predictions = self.predict(coords, input_polar=input_polar)
+
+        # print(betas_train_voxel)
+        # print(betas_test_voxel)
+
+        variance = self.variance_explained(coords, betas_test_voxel)
+
+        noise_ceiling_variance = variance / noise_ceiling
+
+        return noise_ceiling_variance
+        # # loop through each voxel (and n == n_dim_images)
+        # for row_i in tqdm(range(betas_train.shape[1])):
+
+        #     new_row, _ = self.rescale(current_row, betas_test[:, row_i])
+
+        #     rss = np.sum((new_row - betas_test[:, row_i]) ** 2)
+
+        #     variance = np.sum((betas_test[:, row_i] - np.mean(betas_test[:, row_i])) ** 2)
+        #     ve_voxels = 1 - rss / variance  # noise ceilling of all voxels in current roi
+
+        # noise_ceilling_all_vox[row_i] = ve_voxels
 
 
 def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
@@ -432,6 +531,8 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         "solved",
         "var_train",
         "var_test",
+        "noise_ceiling",
+        "model_performance",
     ]
     initial = params["initial"]
     bounds = params["bounds"]
@@ -442,9 +543,13 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         )
         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
 
-        mask = retrieve_roi_mask(config, subj)
-        betas, _ = retrieve_stacked_betas(config, subj, "averaged", 0)
-        betas_test = retrieve_stacked_betas_test(config, subj)
+        mask = retrieve_roi_mask(config, subj, set_to_take)
+        betas, _ = retrieve_stacked_betas(
+            config, subj, "averaged", 0, subj_to_check=set_to_take
+        )
+        betas_test = retrieve_stacked_betas_test(
+            config, subj, subj_to_check=set_to_take
+        )
 
         if np.isnan(betas).any():
             raise ValueError("Found NaNs")
@@ -486,10 +591,14 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                     voxel_activity = betas[:, voxel_i]
                     voxel_activity_test = betas_test[:, voxel_i]
 
-                    fitter = Gaussian2DFitter(use_polar=False)
+                    fitter = Gaussian2DFitter(use_polar=True)
 
                     x_samples, y_samples = (mds[0, :], mds[1, :])
                     popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
+
+                    noise_ceiling = fitter.compute_noise_ceiling(
+                        voxel_activity, voxel_activity_test
+                    )
 
                     var_train = fitter.variance_explained(
                         (x_samples, y_samples), voxel_activity
@@ -498,10 +607,17 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                         (x_samples, y_samples), voxel_activity_test
                     )
 
-                    A, x0, y0, sigma = popt
+                    model_performance_ceiling = fitter.variance_explained_noise_ceiling(
+                        (x_samples, y_samples), voxel_activity_test, noise_ceiling
+                    )
+
+                    # print(f"{var_test=}")
+
+                    # print(f"{var_noise_ceiling=}")
+                    # quit()
+                    A, x0, y0, sigma, intercept = popt
 
                     slope = A  # Directly assigning A as amplitude
-                    intercept = 0  # Assuming no offset
                     voxel_fit = [
                         x0,
                         y0,
@@ -511,6 +627,8 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                         solved,
                         var_train,
                         var_test,
+                        noise_ceiling,
+                        model_performance_ceiling,
                     ]
 
                     fits_roi.loc[voxel_i] = voxel_fit
@@ -550,143 +668,29 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 masked_voxel_betas = betas.T[mask_voxel_indices].T
                 masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
 
-                def apply_gaussian_fit(fit_params):
-                    """
-                    Apply a 2D Gaussian model using the given fit parameters.
-
-                    Parameters:
-                    - fit_params: Array of fit parameters for the Gaussian model.
-
-                    Returns:
-                    - Predicted activity based on the Gaussian function.
-                    """
-                    return gaussian_2d_curve(mds, *fit_params)
-
-                # # Apply Gaussian function to each row in fits_roi
-                # predicted_activity = fits_roi[required_columns].apply(
-                #     apply_gaussian_fit, axis=1
-                # )
-
-                # print(f"{predicted_activity.shape=}")
-
-                # # Convert the results to a NumPy array (ensure proper shape)
-                # predicted_activity = np.array(
-                #     [np.array(activity) for activity in predicted_activity]
-                # ).T
-
-                # predicted_activity = masked_voxel_betas
-
-                # Compute amplitudes for each trial and voxel
-                predicted_activity = np.zeros((mds.shape[1], len(mask_voxel_indices)))
-
-                activity_mean = np.zeros((mds.shape[1], len(mask_voxel_indices)))
-
-                for v in range(len(mask_voxel_indices)):
-                    x0, y0, sigma, slope = fits_roi.loc[
-                        v, ["x0", "y0", "sigma", "slope"]
-                    ]
-                    x_trials, y_trials = (
-                        mds.T[:, 0],
-                        mds.T[:, 1],
-                    )  # Extract trial coordinates
-
-                    # Compute Gaussian amplitude for each trial at this voxel
-                    predicted_activity[:, v] = slope * np.exp(
-                        -((x_trials - x0) ** 2 + (y_trials - y0) ** 2) / (2 * sigma**2)
-                    )
-
-                    activity_mean[:, v] = masked_voxel_betas[:, v].mean()
-
-                # print(f"{predicted_activity.shape=}")
-                # print(f"{masked_voxel_betas.shape=}")
-
-                # Compute Residual Sum of Squares (RSS) and Total Sum of Squares (TSS)
-                residual_sum_squares = np.sum(
-                    (predicted_activity - masked_voxel_betas) ** 2, axis=0
-                )
-
-                residual_sum_squares_mean = np.sum(
-                    (activity_mean - masked_voxel_betas) ** 2, axis=0
-                )
-
-                # print(residual_sum_squares[:5])
-                total_sum_squares = np.sum(
-                    (masked_voxel_betas - masked_voxel_betas.mean(axis=0)) ** 2, axis=0
-                )
-
-                # print(total_sum_squares[:5])
-
-                # Compute RSS and TSS for test data
-                residual_sum_squares_test = np.sum(
-                    (predicted_activity - masked_voxel_betas_test) ** 2, axis=0
-                )
-                total_sum_squares_test = np.sum(
-                    (masked_voxel_betas_test - masked_voxel_betas_test.mean(axis=0))
-                    ** 2,
-                    axis=0,
-                )
-
-                # Compute variance explained (R² score)
-                fits_roi["variance_explained"] = 1 - (
-                    residual_sum_squares / (total_sum_squares + EPSILON)
-                )
-
-                fits_roi["sanity_mean"] = 1 - (
-                    residual_sum_squares_mean / (total_sum_squares + EPSILON)
-                )
-
-                fits_roi["sanity_correct"] = 1 - (
-                    np.sum((masked_voxel_betas - masked_voxel_betas) ** 2, axis=0)
-                    / (total_sum_squares + EPSILON)
-                )
-
-                # Compute variance explained (R² score)
-                fits_roi["variance_explained_test"] = 1 - (
-                    residual_sum_squares_test / (total_sum_squares_test + EPSILON)
-                )
-
-                fits_roi["sanity_correct_test"] = 1 - (
-                    np.sum((masked_voxel_betas - masked_voxel_betas_test) ** 2, axis=0)
-                    / (total_sum_squares_test + EPSILON)
-                )
-
-                sanity_correct_test_stat = fits_roi["sanity_correct_test"].describe()
+                var_train_stat = fits_roi["var_train"].describe()
                 # Calculate the positive percentile
-                positive_percentile = find_positive_percentile(
-                    fits_roi["sanity_correct_test"]
-                )
+                positive_percentile = find_positive_percentile(fits_roi["var_train"])
 
                 # Add the custom statistic to the results
                 if positive_percentile is not None:
-                    sanity_correct_test_stat["positive_percentile"] = (
-                        positive_percentile
-                    )
+                    var_train_stat["positive_percentile"] = positive_percentile
                 else:
-                    sanity_correct_test_stat["positive_percentile"] = (
-                        "No positive values"
-                    )
+                    var_train_stat["positive_percentile"] = "No positive values"
 
-                print(
-                    f"Stats for test set with actual train values as predictions:\n{sanity_correct_test_stat}"
-                )
+                print(f"Stats for train set:\n{var_train_stat}")
 
-                variance_explained_stat = fits_roi["variance_explained"].describe()
+                var_test_stat = fits_roi["var_test"].describe()
                 # Calculate the positive percentile
-                positive_percentile = find_positive_percentile(
-                    fits_roi["variance_explained"]
-                )
+                positive_percentile = find_positive_percentile(fits_roi["var_test"])
 
                 # Add the custom statistic to the results
                 if positive_percentile is not None:
-                    variance_explained_stat["positive_percentile"] = positive_percentile
+                    var_test_stat["positive_percentile"] = positive_percentile
                 else:
-                    variance_explained_stat["positive_percentile"] = (
-                        "No positive values"
-                    )
+                    var_test_stat["positive_percentile"] = "No positive values"
 
-                print(
-                    f"Stats for train set with predicted values by model:\n{variance_explained_stat}"
-                )
+                print(f"Stats for test set:\n{var_test_stat}")
 
                 fits_roi.to_excel(gaussian_result_file_path, index=False)
 
@@ -695,4 +699,4 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
-    fit_gaussian_params(config, [1], "shared")
+    fit_gaussian_params(config, [1], "subj_01")

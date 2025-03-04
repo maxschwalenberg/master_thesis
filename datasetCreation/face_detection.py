@@ -37,7 +37,7 @@ def generate_face_detection_results(config: Configuration):
         subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
 
         faces_dataset_split = pd.read_excel(
-            os.path.join(subdir_path, config.nsd_labeled_subset_animals_humans)
+            os.path.join(subdir_path, config.subset_animate)
         )
 
         detection_results = []

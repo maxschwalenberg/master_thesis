@@ -18,43 +18,27 @@ logging.basicConfig(
 )
 
 
-def correct_sets_for_nans_and_missing_samples(
-    config: Configuration, sets: list[str], subject_to_filter: list
-):
+def correct_sets_for_nans_and_missing_samples(config: Configuration, subj_to_pick: str):
+
     subject_stats = {}
-    for i in range(1, 8 + 1):
-        subject_stats[i] = []
+
+    if subj_to_pick == "shared":
+        for i in range(1, 8 + 1):
+            subject_stats[i] = []
+    else:
+        subject_stats[int(subj_to_pick[-1])] = []
 
     missing_nan_information_path = os.path.join(
-        config.excel_files_target_dir, "missing_nan_info.json"
+        config.excel_files_target_dir, subj_to_pick, "missing_nan_info.json"
     )
     with open(missing_nan_information_path, "r") as f:
         missing_nan_information = json.load(f)
 
     missing_subjects_json_path = os.path.join(
-        config.excel_files_target_dir, "missing_subjects.json"
+        config.excel_files_target_dir, subj_to_pick, "missing_subjects.json"
     )
     with open(missing_subjects_json_path, "r") as f:
         missing_subjects = json.load(f)
-
-    # valid_filenames = []
-    # for file_path in sets:
-    #     logging.info(f"Processing {os.path.basename(file_path)}")
-    #     subset = pd.read_excel(file_path)
-
-    #     coco_id = subset["cocoId"].to_list()
-    #     coco_id = [f"{e:012d}" for e in coco_id]
-
-    #     coco_ids_per_set.append(coco_id)
-
-    #     duplicates = len(coco_id) != len(set(coco_id))
-    #     logging.info(f"Duplicates: {duplicates}")
-
-    #     valid_filenames += coco_id
-
-    # duplicates = len(valid_filenames) != len(set(valid_filenames))
-    # logging.info(f"Duplicates for joined sets?: {duplicates}")
-    # print("-" * 20)
 
     for coco_id, missing_subjects in missing_subjects.items():
         for missing_subject in missing_subjects:
@@ -66,6 +50,33 @@ def correct_sets_for_nans_and_missing_samples(
             subject_stats[int(missing_subject)].append(coco_id)
 
     set_coco_ids = []
+
+    sets = [
+        os.path.join(
+            config.excel_files_target_dir,
+            subj_to_pick,
+            config.subset_animate_face_unchecked,
+        ),
+        os.path.join(
+            config.excel_files_target_dir,
+            subj_to_pick,
+            config.subset_animate_non_face_unchecked,
+        ),
+    ]
+
+    target_paths = [
+        os.path.join(
+            config.excel_files_target_dir,
+            subj_to_pick,
+            config.subset_animate_face_nans_removed,
+        ),
+        os.path.join(
+            config.excel_files_target_dir,
+            subj_to_pick,
+            config.subset_animate_non_face_nans_removed,
+        ),
+    ]
+
     for set_path in sets:
         set_df = pd.read_excel(set_path)
         coco_ids = set_df["cocoId"].to_list()
@@ -74,12 +85,11 @@ def correct_sets_for_nans_and_missing_samples(
         set_coco_ids.append(coco_ids)
 
     all_faulty = []
-    for subject in range(1, 8 + 1):
+    for subject in list(subject_stats.keys()):
         print(f"{subject=}")
         subject_stats[subject] = list(set(subject_stats[subject]))
 
-        if subject in subject_to_filter:
-            all_faulty += subject_stats[subject]
+        all_faulty += subject_stats[subject]
 
         # print(f"Subject {subject}: {len(subject_stats[subject])}")
         for i, set_coco_id in enumerate(set_coco_ids):
@@ -102,27 +112,31 @@ def correct_sets_for_nans_and_missing_samples(
         set_df = pd.read_excel(set_path)
 
         path_basename = os.path.basename(set_path)
-        new_path = os.path.join(
-            config.excel_files_target_dir,
-            os.path.splitext(path_basename)[0]
-            + "_filtered"
-            + os.path.splitext(path_basename)[1],
-        )
+        new_path = target_paths[i]
 
         set_coco_id = set_coco_ids[i]
         intersect = list(set(all_faulty) & set(set_coco_id))
         intersect = [int(e.lstrip("0")) for e in intersect]
 
         set_df = set_df[~set_df["cocoId"].isin(intersect)]
+        logging.info(f"Saving to {new_path}")
         set_df.to_excel(new_path, index=False)
 
 
 def adjust_labelled_data(
-    config: Configuration, fullset: bool = False, strict: bool = True
+    config: Configuration, subj_to_pick: str, fullset: bool = False, strict: bool = True
 ):
-    missing_subjects_json_path = os.path.join(
-        config.excel_files_target_dir, "missing_subjects.json"
-    )
+
+    if subj_to_pick == "shared":
+        missing_subjects_json_path = os.path.join(
+            config.excel_files_target_dir, "missing_subjects.json"
+        )
+        with open(missing_subjects_json_path, "r") as f:
+            missing_subjects = json.load(f)
+
+    else:
+        missing_subjects = {}
+
     nsd_all_coco_path = os.path.join(
         config.excel_files_target_dir, config.nsd_coco_file_path
     )
@@ -130,18 +144,25 @@ def adjust_labelled_data(
     nsd_coco = pd.read_excel(nsd_all_coco_path)
     nsd_coco_filtered = nsd_coco[nsd_coco["amount_participants"] == 8]
 
-    with open(missing_subjects_json_path, "r") as f:
-        missing_subjects = json.load(f)
-
     if fullset:
         # handle nsd_coco_filtered
         raise NotImplementedError()
 
     else:
         file_paths = [
-            os.path.join(config.excel_files_target_dir, "non_animate_subset.xlsx"),
-            os.path.join(config.excel_files_target_dir, "faces_subset.xlsx"),
-            os.path.join(config.excel_files_target_dir, "animate_non_face.xlsx"),
+            # os.path.join(
+            #     config.excel_files_target_dir, subj_to_pick, "non_animate_subset.xlsx"
+            # ),
+            os.path.join(
+                config.excel_files_target_dir,
+                subj_to_pick,
+                config.subset_animate_face_unchecked,
+            ),
+            os.path.join(
+                config.excel_files_target_dir,
+                subj_to_pick,
+                config.subset_animate_non_face_unchecked,
+            ),
         ]
 
         coco_ids_per_set = []
@@ -180,12 +201,17 @@ def adjust_labelled_data(
 
     missing_nan_information = defaultdict(lambda: defaultdict(list))
 
-    for subj in range(1, 8 + 1):
+    if subj_to_pick == "shared":
+        subjects_to_loop = list(range(1, 8 + 1))
+    else:
+        subjects_to_loop = [int(subj_to_pick[-1])]
+
+    for subj in subjects_to_loop:
         remove_by_subject[subj] = []
 
     images_betas_dir = config.image_betas_dir
     for valid_filename in tqdm(valid_filenames):
-        for subj in range(1, 8 + 1):
+        for subj in subjects_to_loop:
             npy_files = sorted(
                 glob.glob(
                     os.path.join(
@@ -193,6 +219,8 @@ def adjust_labelled_data(
                     )
                 )
             )
+
+            assert len(npy_files) != 0
 
             all_nan = []
             for npy_file in npy_files:
@@ -241,7 +269,7 @@ def adjust_labelled_data(
 
     valid_filenames = [x for x in valid_filenames if x not in remove_nan_filenames]
 
-    for subj in range(1, 8 + 1):
+    for subj in subjects_to_loop:
         logging.info(
             f"{subj:02d}: Removing {len(remove_by_subject[subj])} because of NaNs...."
         )
@@ -254,7 +282,7 @@ def adjust_labelled_data(
         print()
 
     missing_nan_information_path = os.path.join(
-        config.excel_files_target_dir, "missing_nan_info.json"
+        config.excel_files_target_dir, subj_to_pick, "missing_nan_info.json"
     )
     with open(missing_nan_information_path, "w") as f:
         json.dump(dict(missing_nan_information), f, indent=4)
@@ -321,26 +349,37 @@ from collections import defaultdict
 import pandas as pd
 
 
-def load_existing_missing_data_stats(config: Configuration):
-    missing_subjects_json_path = os.path.join(
-        config.excel_files_target_dir, "missing_subjects.json"
-    )
+def load_existing_missing_data_stats(config: Configuration, subj_to_pick: str):
+
     missing_nan_information_path = os.path.join(
-        config.excel_files_target_dir, "missing_nan_info.json"
+        config.excel_files_target_dir, subj_to_pick, "missing_nan_info.json"
     )
 
     file_paths = [
+        # os.path.join(
+        #     config.excel_files_target_dir, subj_to_pick,"nonanimate", "non_animate_subset.xlsx"
+        # ),
         os.path.join(
-            config.excel_files_target_dir, "nonanimate", "non_animate_subset.xlsx"
+            config.excel_files_target_dir,
+            subj_to_pick,
+            config.subset_animate_face_final,
         ),
-        os.path.join(config.excel_files_target_dir, "faces", "faces_subset.xlsx"),
         os.path.join(
-            config.excel_files_target_dir, "animate_nonface", "animate_non_face.xlsx"
+            config.excel_files_target_dir,
+            subj_to_pick,
+            config.subset_animate_non_face_final,
         ),
     ]
 
-    with open(missing_subjects_json_path, "r") as f:
-        missing_subjects = json.load(f)
+    if subj_to_pick == "shared":
+        missing_subjects_json_path = os.path.join(
+            config.excel_files_target_dir, subj_to_pick, "missing_subjects.json"
+        )
+
+        with open(missing_subjects_json_path, "r") as f:
+            missing_subjects = json.load(f)
+    else:
+        missing_subjects = {}
 
     with open(missing_nan_information_path, "r") as f:
         missing_nan_information = json.load(f)
@@ -392,17 +431,32 @@ def load_existing_missing_data_stats(config: Configuration):
 if __name__ == "__main__":
     config = load_config("config.yaml")
 
-    load_existing_missing_data_stats(config)
+    assert len(config.nsd_samples_subjects_to_check) == 1
 
-    quit()
+    subj_to_pick = (
+        "shared"
+        if config.nsd_samples_subjects_to_check[0] == "shared"
+        else f"subj_{int(config.nsd_samples_subjects_to_check[0]):02d}"
+    )
+
+    # subj_to_pick = "subj_01"
+
+    if subj_to_pick == "shared":
+        check_labels(config)
+    else:
+        missing_subjects_json_path = os.path.join(
+            config.excel_files_target_dir, subj_to_pick, "missing_subjects.json"
+        )
+        with open(missing_subjects_json_path, "w") as f:
+            json.dump({}, f)
+
+    adjust_labelled_data(config, subj_to_pick)
+
+    load_existing_missing_data_stats(config, subj_to_pick)
+
     correct_sets_for_nans_and_missing_samples(
         config,
-        [
-            "data/labels/animate_nonface/animate_non_face.xlsx",
-            "data/labels/faces/faces_subset.xlsx",
-            "data/labels/nonanimate/non_animate_subset.xlsx",
-        ],
-        [1, 3, 7, 2],
+        subj_to_pick,
     )
     #  adjust_labelled_data(config)
     # check_labels(config)

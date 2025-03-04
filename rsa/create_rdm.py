@@ -42,7 +42,7 @@ def create_rdm(
 
     logging.info(f"Creating RDM for mode {mode}")
     logging.info(
-        f"Using positive set: {os.path.join(set_to_take, config.nsd_positive_subset)}"
+        f"Using positive set: {os.path.join(set_to_take, config.subset_animate_face_final)}"
     )
 
     if mode == "single":
@@ -52,20 +52,24 @@ def create_rdm(
 
         mask_path_lh = os.path.join(
             config.t_test_roi_dir,
-            "face_animate",
-            f"lh.subj{sub:02d}.testrois_thresholded.mgz",
+            set_to_take,
+            f"lh.subj{sub:02d}.cleanedrois.mgz",
         )
         mask_path_rh = os.path.join(
             config.t_test_roi_dir,
-            "face_animate",
-            f"rh.subj{sub:02d}.testrois_thresholded.mgz",
+            set_to_take,
+            f"rh.subj{sub:02d}.cleanedrois.mgz",
         )
+
+        logging.info(f"Loading mask from\n{mask_path_rh=}\n{mask_path_lh=}")
 
         mask_lh = nib.load(mask_path_lh).get_fdata().squeeze()
         mask_rh = nib.load(mask_path_rh).get_fdata().squeeze()
 
         mask = np.concatenate((mask_lh, mask_rh)).astype(int)
-        betas, image_ids = retrieve_stacked_betas(config, sub, mode, sample_to_pick)
+        betas, image_ids = retrieve_stacked_betas(
+            config, sub, mode, sample_to_pick, subj_to_check=set_to_take
+        )
 
         assert not np.isnan(betas).any()
 
@@ -304,7 +308,7 @@ def create_rdm(
 
 
 if __name__ == "__main__":
-    set_to_take = "shared"
+    set_to_take = "subj_01"
 
     config = load_config("config.yaml")
     mask_values = list(config.rois_to_analyze.values())

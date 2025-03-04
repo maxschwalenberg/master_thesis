@@ -218,15 +218,21 @@ def save_betas_single_image_improved(
     del full_brain_data
 
 
-def load_betas_subset(config: Configuration, overwrite: bool = False):
+def load_betas_subset(
+    config: Configuration, overwrite: bool = False, subj_to_pick="shared"
+):
     target_image_betas_dir_positive = os.path.join(config.image_betas_dir)
     target_image_betas_dir_negative = os.path.join(config.image_betas_dir)
 
     positive_subset_excel_path = os.path.join(
-        config.excel_files_target_dir, config.nsd_positive_subset
+        config.excel_files_target_dir,
+        subj_to_pick,
+        config.subset_animate_face_unchecked,
     )
     negative_subset_excel_path = os.path.join(
-        config.excel_files_target_dir, config.nsd_negative_subset
+        config.excel_files_target_dir,
+        subj_to_pick,
+        config.subset_animate_non_face_unchecked,
     )
 
     # positive_subset = pd.read_excel(positive_subset_excel_path)
@@ -256,4 +262,12 @@ def load_betas_subset(config: Configuration, overwrite: bool = False):
 if __name__ == "__main__":
     config = load_config("config.yaml")
 
-    load_betas_subset(config, overwrite=False)
+    assert len(config.nsd_samples_subjects_to_check) == 1
+
+    subj_to_pick = (
+        "shared"
+        if config.nsd_samples_subjects_to_check[0] == "shared"
+        else f"subj_{int(config.nsd_samples_subjects_to_check[0]):02d}"
+    )
+
+    load_betas_subset(config, overwrite=False, subj_to_pick=subj_to_pick)

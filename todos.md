@@ -45,3 +45,20 @@
 - generate common plot of response amplitudes and fits
 
 - analyze ROI 7 (FFA)
+
+- include intercept fitting
+- remove inhibitory ROI for now
+
+- separating brain areas by responses of binary classes as opposed to using prf visual field maps
+
+- new subject results
+- variance map
+- fitting results
+- MDS space visualizations (images; voxel fits)
+
+- same colormap 2d view (done)
+- rescaled test variance explained (either both rescaled or both NOT rescaled)
+- plots for variances explaineded and sigmas
+- create rois and sets across participants
+
+improved and more conclusive statistical testing: https://www.sciencedirect.com/science/article/pii/S089662732100845X

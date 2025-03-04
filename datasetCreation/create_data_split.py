@@ -46,21 +46,22 @@ def get_coco_image_labels(image_id, coco_instance: COCO):
 
 
 def filter_full_nsd_df(df: pd.DataFrame, config: Configuration):
-    # filter dataframe
     conditions = []
 
     if "shared" in config.nsd_samples_subjects_to_check:
-        conditions.append(("amount_participants", [8]))
+        conditions.append(("amount_participants", {8}))
 
-        # Create a new list without "shared"
-        subjects = [
+        # Erstelle eine neue Liste ohne "shared"
+        subjects = {
             int(s) for s in config.nsd_samples_subjects_to_check if s != "shared"
-        ]
+        }
         conditions.append(("subject", subjects))
     else:
-        conditions.append(("subject", config.nsd_samples_subjects_to_check))
+        conditions.append(
+            ("subject", {int(s) for s in config.nsd_samples_subjects_to_check})
+        )
 
-    # df = df[(df["amount_participants"] == 8) | (df["subject"] == 1)]
+    # Filtere die DataFrame-Zeilen basierend auf den Bedingungen
     df = df[
         df.apply(
             lambda row: any(row[col] in values for col, values in conditions), axis=1
@@ -99,7 +100,6 @@ def download_data(config: Configuration):
     df = pd.read_excel(
         os.path.join(config.excel_files_target_dir, config.nsd_coco_file_path)
     )
-
     df = filter_full_nsd_df(df, config)
 
     urls = []
@@ -152,6 +152,10 @@ def create_data_split(config: Configuration):
 
     full_dataset = filter_full_nsd_df(full_dataset, config)
 
+    print(full_dataset)
+
+    print(full_dataset.describe())
+
     for nsd_subj_subset in config.nsd_samples_subjects_to_check:
         filtered_df = extract_subj_nsd_df(full_dataset, nsd_subj_subset)
 
@@ -166,12 +170,8 @@ def create_data_split(config: Configuration):
         os.makedirs(subdir_path, exist_ok=True)
 
         # Create file paths for the two Excel files
-        animals_path = os.path.join(
-            subdir_path, config.nsd_labeled_subset_animals_humans
-        )
-        non_animals_path = os.path.join(
-            subdir_path, config.nsd_labeled_subset_non_animals
-        )
+        animals_path = os.path.join(subdir_path, config.subset_animate)
+        non_animals_path = os.path.join(subdir_path, config.subset_non_animate)
 
         # Assume that if the animals file exists, both splits exist.
         if os.path.exists(animals_path):
@@ -227,5 +227,5 @@ def create_data_split(config: Configuration):
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
-    # download_data(config)
+    download_data(config)
     create_data_split(config)

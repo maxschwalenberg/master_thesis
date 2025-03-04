@@ -17,11 +17,26 @@ coco_val_json_path: data/coco/instances_val2017.json
 nsd_coco_file_path: coco/nsd_coco.xlsx
 nsd_labeled_subset_path: coco/nsd_full_coco.xlsx
 
-nsd_labeled_subset_non_animals: nsd_full_non_animals.xlsx
-nsd_labeled_subset_animals_humans: nsd_full_animals_humans.xlsx
+# dataset creation file names:
+# step 1
+subset_non_animate: nsd_full_non_animals.xlsx
+subset_animate: nsd_full_animals_humans.xlsx
 
-nsd_negative_subset: animate_nonface/animate_non_face_filtered.xlsx
-nsd_positive_subset: faces/faces_subset_filtered.xlsx
+# step 2 - face detection -> generate positive and negative set
+subset_animate_face_unchecked: faces/faces_unchecked.xlsx
+subset_animate_non_face_unchecked: animate_nonface/animate_non_face_unchecked.xlsx
+
+# step 3 - remove nans
+subset_animate_face_nans_removed: faces/faces_nans_removed.xlsx
+subset_animate_non_face_nans_removed: animate_nonface/animate_non_face_nans_removed.xlsx
+
+# step 4 - labelled (checked labelling)
+subset_animate_face_labelled: faces/faces_labelled.xlsx
+subset_animate_non_face_labelled: animate_nonface/animate_non_face_labelled.xlsx
+
+# step 5 - final
+subset_animate_face_final: faces/faces_final.xlsx
+subset_animate_non_face_final: animate_nonface/animate_non_face_final.xlsx
 
 face_detection_results_path: face_detection_result.json
 
@@ -34,10 +49,11 @@ nsd_subdir: NSD
 proj_dir: /media/harveylab/storage2/stan-thesis
 betas_subdir: betas
 
-subjects_to_analyze: [1, 2, 3, 7]
-rois_to_analyze: { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7 }
+subjects_to_analyze: [1] # [1, 2, 3, 7]
+rois_to_analyze:
+  { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8 }
 
 gaussian_fit_results_dir: data/gaussian_results
 
 # for dataset creation
-nsd_samples_subjects_to_check: ["shared", "1"] # ['shared', '1', ..., '8']
+nsd_samples_subjects_to_check: ["2"] # ['shared', '1', ..., '8']

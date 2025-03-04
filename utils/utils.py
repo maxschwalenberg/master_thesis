@@ -17,12 +17,12 @@ logging.basicConfig(
 )
 
 
-def retrieve_roi_mask(config: Configuration, subject: int):
+def retrieve_roi_mask(config: Configuration, subject: int, subj_to_check: str):
     mask_path_lh = os.path.join(
-        config.t_test_roi_dir, "face_animate", f"lh.subj{subject:02d}.testrois.mgz"
+        config.t_test_roi_dir, subj_to_check, f"lh.subj{subject:02d}.cleanedrois.mgz"
     )
     mask_path_rh = os.path.join(
-        config.t_test_roi_dir, "face_animate", f"rh.subj{subject:02d}.testrois.mgz"
+        config.t_test_roi_dir, subj_to_check, f"rh.subj{subject:02d}.cleanedrois.mgz"
     )
     logging.info(f"Loading mask from\n{mask_path_lh}\n{mask_path_rh}")
 
@@ -46,11 +46,12 @@ def retrieve_stacked_betas(
     mode: str,
     sample: int,
     label_subset_name: str = None,
+    subj_to_check="shared",
 ):
     assert mode in ["averaged", "single"]
 
     if label_subset_name is None:
-        label_subset_name = config.nsd_positive_subset
+        label_subset_name = config.subset_animate_face_final
 
     logging.info(f"Loading from {label_subset_name}")
 
@@ -59,7 +60,9 @@ def retrieve_stacked_betas(
     data = []
     image_ids = []
 
-    set_excel_path = os.path.join(config.excel_files_target_dir, label_subset_name)
+    set_excel_path = os.path.join(
+        config.excel_files_target_dir, subj_to_check, label_subset_name
+    )
 
     subset = pd.read_excel(set_excel_path)
     filenames = subset["cocoId"].to_list()
@@ -69,8 +72,13 @@ def retrieve_stacked_betas(
         image_ids.append(entry)
 
         npy_files = sorted(
-            glob.glob(os.path.join(betas_dir, entry, f"subj_{subj:02d}", "*.npy"))
+            glob.glob(
+                os.path.join(betas_dir, entry, f"subj_{subj:02d}", "full.betas_*.npy")
+            )
         )
+
+        if len(npy_files) == 0:
+            raise ValueError(f"No data found for {entry}!")
 
         if mode == "single":
             npy_file = npy_files[sample]
@@ -87,13 +95,21 @@ def retrieve_stacked_betas(
     return np.stack(data), image_ids
 
 
-def retrieve_stacked_betas_test(config: Configuration, subj: int):
+def retrieve_stacked_betas_test(
+    config: Configuration,
+    subj: int,
+    subj_to_check="shared",
+    label_subset_name: str = None,
+):
     betas_dir = config.image_betas_dir
 
     data = []
 
+    if label_subset_name is None:
+        label_subset_name = config.subset_animate_face_final
+
     positive_set_excel_path = os.path.join(
-        config.excel_files_target_dir, config.nsd_positive_subset
+        config.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
     positive_subset = pd.read_excel(positive_set_excel_path)
@@ -105,6 +121,9 @@ def retrieve_stacked_betas_test(config: Configuration, subj: int):
         npy_files = sorted(
             glob.glob(os.path.join(betas_dir, entry, f"subj_{subj:02d}", "*.npy"))
         )
+
+        if len(npy_files) == 0:
+            raise ValueError(f"No data found for {entry}!")
 
         if len(npy_files) <= 1:
             logging.warning(

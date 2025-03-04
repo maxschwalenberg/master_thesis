@@ -29,11 +29,8 @@ class Configuration:
 
     nsd_labeled_subset_path: str
 
-    nsd_labeled_subset_non_animals: str
-    nsd_labeled_subset_animals_humans: str
-
-    nsd_negative_subset: str
-    nsd_positive_subset: str
+    # nsd_negative_subset: str
+    # nsd_positive_subset: str
 
     face_detection_results_path: str
 
@@ -54,6 +51,27 @@ class Configuration:
     # for dataset creation
 
     nsd_samples_subjects_to_check: list[str]  # ['shared', '1', ..., '8']
+
+    # dataset creation file names:
+    # step 1
+    subset_non_animate: str
+    subset_animate: str
+
+    # step 2 - face detection -> generate positive and negative set
+    subset_animate_face_unchecked: str
+    subset_animate_non_face_unchecked: str
+
+    # step 3 - remove nans
+    subset_animate_face_nans_removed: str
+    subset_animate_non_face_nans_removed: str
+
+    # step 4 - labelled (checked labelling)
+    subset_animate_face_labelled: str
+    subset_animate_non_face_labelled: str
+
+    # step 5 - final
+    subset_animate_face_final: str
+    subset_animate_non_face_final: str
 
 
 def load_config(config_file_path: str):
