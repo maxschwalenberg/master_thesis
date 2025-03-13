@@ -61,4 +61,6 @@
 - plots for variances explaineded and sigmas
 - create rois and sets across participants
 
+- allow rescaling of fitted gaussian
+
 improved and more conclusive statistical testing: https://www.sciencedirect.com/science/article/pii/S089662732100845X

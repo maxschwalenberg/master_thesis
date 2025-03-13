@@ -1,59 +1,72 @@
-images_target_dir: data/images
-excel_files_target_dir: data/labels
-image_betas_dir: data/image_betas
-t_test_results_dir: data/t_test_results
-t_test_roi_dir: data/t_test_roi
-mds_dir: data/mds_dir
-rdm_dir: data/rdm_dir
+# Directories for storing processed data
+directories:
+  images_target_dir: data/images
+  excel_files_target_dir: data/labels
+  image_betas_dir: data/image_betas
+  t_test_results_dir: data/t_test_results
+  t_test_roi_dir: data/t_test_roi
+  mds_dir: data/mds_dir
+  rdm_dir: data/rdm_dir
+  gaussian_fit_results_dir: data/gaussian_results
 
-full_brain_data_dir: /media/harveylab/STORAGE1_NA/NSD/full_brain
-stans_thesis_repo_data: /media/harveylab/storage2/stan-thesis/data/
-mask_data_dir: mask
-freesurfer_dir: /media/harveylab/storage2/stan-thesis/data/nsddata/freesurfer
+# NSD data locations
+nsd_data:
+  nsddata_responses_tsv_dir: data/nsddata_tsv
+  nsddata_betas_dir: /media/harveylab/STORAGE1_NA/NSD/nsddata_betas
+  full_brain_data_dir: /media/harveylab/STORAGE1_NA/NSD/full_brain_max
 
-coco_train_json_path: data/coco/instances_train2017.json
-coco_val_json_path: data/coco/instances_val2017.json
+  stans_thesis_repo_data: /media/harveylab/storage2/stan-thesis/data/
+  mask_data_dir: mask
+  freesurfer_dir: /media/harveylab/storage2/stan-thesis/data/nsddata/freesurfer
 
-nsd_coco_file_path: coco/nsd_coco.xlsx
-nsd_labeled_subset_path: coco/nsd_full_coco.xlsx
+# COCO dataset paths
+coco_data:
+  coco_train_json_path: data/coco/instances_train2017.json
+  coco_val_json_path: data/coco/instances_val2017.json
+  nsd_coco_file_path: coco/nsd_coco.xlsx
+  nsd_labeled_subset_path: coco/nsd_full_coco.xlsx
 
-# dataset creation file names:
-# step 1
-subset_non_animate: nsd_full_non_animals.xlsx
-subset_animate: nsd_full_animals_humans.xlsx
+# Dataset creation files (Step-wise comments added)
+dataset_creation:
+  # Step 1: Initial subsets
+  subset_non_animate: nsd_full_non_animals.xlsx
+  subset_animate: nsd_full_animals_humans.xlsx
 
-# step 2 - face detection -> generate positive and negative set
-subset_animate_face_unchecked: faces/faces_unchecked.xlsx
-subset_animate_non_face_unchecked: animate_nonface/animate_non_face_unchecked.xlsx
+  # Step 2: Face detection -> generate positive and negative set
+  subset_animate_face_unchecked: faces/faces_unchecked.xlsx
+  subset_animate_non_face_unchecked: animate_nonface/animate_non_face_unchecked.xlsx
 
-# step 3 - remove nans
-subset_animate_face_nans_removed: faces/faces_nans_removed.xlsx
-subset_animate_non_face_nans_removed: animate_nonface/animate_non_face_nans_removed.xlsx
+  # Step 3: Remove NaNs
+  subset_animate_face_nans_removed: faces/faces_nans_removed.xlsx
+  subset_animate_non_face_nans_removed: animate_nonface/animate_non_face_nans_removed.xlsx
 
-# step 4 - labelled (checked labelling)
-subset_animate_face_labelled: faces/faces_labelled.xlsx
-subset_animate_non_face_labelled: animate_nonface/animate_non_face_labelled.xlsx
+  # Step 4: Labeled (checked labeling)
+  subset_animate_face_labelled: faces/faces_labelled.xlsx
+  subset_animate_non_face_labelled: animate_nonface/animate_non_face_labelled.xlsx
 
-# step 5 - final
-subset_animate_face_final: faces/faces_final.xlsx
-subset_animate_non_face_final: animate_nonface/animate_non_face_final.xlsx
+  # Step 5: Final dataset
+  subset_animate_face_final: faces/faces_final.xlsx
+  subset_animate_non_face_final: animate_nonface/animate_non_face_final.xlsx
 
-face_detection_results_path: face_detection_result.json
+# Face detection results path
+face_detection:
+  results_path: face_detection_result.json
 
-nsd_data_dir: /media/harveylab/storage2/stan-thesis/data
-mask_subdir: mask
-label_subdir: nsddata
-conds_subdir: conditions
-nsd_subdir: NSD
+# NSD project structure
+nsd_project:
+  nsd_data_dir: /media/harveylab/storage2/stan-thesis/data
+  mask_subdir: mask
+  label_subdir: nsddata
+  conds_subdir: conditions
+  nsd_subdir: NSD
+  proj_dir: /media/harveylab/storage2/stan-thesis
+  betas_subdir: betas
 
-proj_dir: /media/harveylab/storage2/stan-thesis
-betas_subdir: betas
+# Subjects and ROIs to analyze
+analysis:
+  subjects_to_analyze: [2] # [1, 2, 3, 7]
+  rois_to_analyze: [1, 2, 3, 4, 5, 6, 7, 8] # Now a list
 
-subjects_to_analyze: [1] # [1, 2, 3, 7]
-rois_to_analyze:
-  { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8 }
-
-gaussian_fit_results_dir: data/gaussian_results
-
-# for dataset creation
-nsd_samples_subjects_to_check: ["2"] # ['shared', '1', ..., '8']
+# Dataset validation parameters
+dataset_validation:
+  nsd_samples_subjects_to_check: ["1"] # ['shared', '1', ..., '8']

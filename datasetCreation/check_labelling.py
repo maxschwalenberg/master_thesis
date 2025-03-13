@@ -452,7 +452,7 @@ if __name__ == "__main__":
 
     adjust_labelled_data(config, subj_to_pick)
 
-    load_existing_missing_data_stats(config, subj_to_pick)
+    # load_existing_missing_data_stats(config, subj_to_pick)
 
     correct_sets_for_nans_and_missing_samples(
         config,

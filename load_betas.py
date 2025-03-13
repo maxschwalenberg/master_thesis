@@ -47,7 +47,9 @@ def save_betas_single_image_improved(
     mode: str = "averaged",
 ):
     logging.info(f"Processing subject {subject_id:02d}")
-    nsd_dir = os.path.join(config.nsd_data_dir, config.nsd_subdir)
+    nsd_dir = os.path.join(
+        config.nsd_project.nsd_data_dir, config.nsd_project.nsd_subdir
+    )
 
     # STEPS:
     # - load tsv file for subject
@@ -61,7 +63,7 @@ def save_betas_single_image_improved(
 
     tsv_path = os.path.join(
         nsd_dir,
-        config.label_subdir,
+        config.nsd_project.label_subdir,
         "ppdata",
         f"subj{subject_id:02d}",
         "behav",
@@ -136,7 +138,7 @@ def save_betas_single_image_improved(
     logging.info(f"Load full brain data for subject {subject_id}")
     # path = os.path.join("/media/harveylab/STORAGE1_NA/NSD/full_brain/subj01", "full_betas_subj01.npy")
     full_brain_data_path = os.path.join(
-        config.full_brain_data_dir,
+        config.nsd_data.full_brain_data_dir,
         f"subj{subject_id:02d}",
         f"full_betas_subj{subject_id:02d}.npy",
     )
@@ -221,18 +223,18 @@ def save_betas_single_image_improved(
 def load_betas_subset(
     config: Configuration, overwrite: bool = False, subj_to_pick="shared"
 ):
-    target_image_betas_dir_positive = os.path.join(config.image_betas_dir)
-    target_image_betas_dir_negative = os.path.join(config.image_betas_dir)
+    target_image_betas_dir_positive = os.path.join(config.directories.image_betas_dir)
+    target_image_betas_dir_negative = os.path.join(config.directories.image_betas_dir)
 
     positive_subset_excel_path = os.path.join(
-        config.excel_files_target_dir,
+        config.directories.excel_files_target_dir,
         subj_to_pick,
-        config.subset_animate_face_unchecked,
+        config.dataset_creation.subset_animate_face_unchecked,
     )
     negative_subset_excel_path = os.path.join(
-        config.excel_files_target_dir,
+        config.directories.excel_files_target_dir,
         subj_to_pick,
-        config.subset_animate_non_face_unchecked,
+        config.dataset_creation.subset_animate_non_face_unchecked,
     )
 
     # positive_subset = pd.read_excel(positive_subset_excel_path)
@@ -262,12 +264,12 @@ def load_betas_subset(
 if __name__ == "__main__":
     config = load_config("config.yaml")
 
-    assert len(config.nsd_samples_subjects_to_check) == 1
+    assert len(config.dataset_validation.nsd_samples_subjects_to_check) == 1
 
     subj_to_pick = (
         "shared"
-        if config.nsd_samples_subjects_to_check[0] == "shared"
-        else f"subj_{int(config.nsd_samples_subjects_to_check[0]):02d}"
+        if config.dataset_validation.nsd_samples_subjects_to_check[0] == "shared"
+        else f"subj_{int(config.dataset_validation.nsd_samples_subjects_to_check[0]):02d}"
     )
 
     load_betas_subset(config, overwrite=False, subj_to_pick=subj_to_pick)

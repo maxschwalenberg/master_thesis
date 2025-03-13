@@ -72,6 +72,7 @@ class Gaussian2DFitter:
         self.use_polar = use_polar
         self.params = None  # Will hold [A, x0, y0, sigma]
         self.solved = False
+        self.mds = (None, None)
 
     @staticmethod
     def gaussian_2d_cartesian(coords, A, x0, y0, sigma, intercept):
@@ -114,89 +115,6 @@ class Gaussian2DFitter:
         exponent = -(d**2) / (2 * sigma**2)
         return A * np.exp(exponent) + intercept
 
-    # def fit(self, x_vals, y_vals, target_values):
-    #     """
-    #     Fit the isotropic 2D Gaussian to the provided data.
-
-    #     Parameters:
-    #       x_vals, y_vals: 1D arrays of sample coordinates
-    #       target_values: 1D array of values at (x_vals, y_vals)
-
-    #     Returns:
-    #       (popt, solved) where popt is the optimized parameters [A, x0, y0, sigma]
-    #       and solved is a boolean indicating whether the fit succeeded.
-    #     """
-    #     A0 = np.max(target_values)
-    #     attempt = 1
-    #     solved = False
-
-    #     if self.use_polar:
-    #         # Convert the Cartesian samples to polar coordinates.
-    #         r_samples = np.sqrt(x_vals**2 + y_vals**2)
-    #         theta_samples = np.arctan2(y_vals, x_vals)
-    #         sigma0 = max(np.std(r_samples), 1e-6)
-    #         # Set bounds: amplitude >= 0, r0 in [0,1] (unit circle), theta0 in [-pi, pi], sigma > 0.
-    #         lower_bounds = [-10, 0, -np.pi, 1e-6]
-    #         upper_bounds = [10, 1.0, np.pi, 100]
-    #     else:
-    #         sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
-    #         # Bounds for Cartesian fit: amplitude >= 0, x0,y0 within [-1, 1], sigma > 0.
-    #         lower_bounds = [-10, -1, -1, 1e-6]
-    #         upper_bounds = [10, 1, 1, 100]
-
-    #     while attempt <= 3 and not solved:
-    #         try:
-    #             if self.use_polar:
-    #                 # Initial guess for polar parameters: [A, r0, theta0, sigma]
-    #                 initial_guess = [
-    #                     np.random.uniform(0.1, A0),
-    #                     np.random.uniform(0, 1),
-    #                     np.random.uniform(-np.pi, np.pi),
-    #                     sigma0,
-    #                 ]
-    #                 # Fit using the polar version of the Gaussian.
-    #                 popt, pcov = curve_fit(
-    #                     Gaussian2DFitter.gaussian_2d_polar,
-    #                     (r_samples, theta_samples),
-    #                     target_values,
-    #                     p0=initial_guess,
-    #                     bounds=(lower_bounds, upper_bounds),
-    #                     maxfev=2000,
-    #                 )
-    #                 # Convert the polar center to Cartesian coordinates.
-    #                 A, r0, theta0, sigma = popt
-    #                 x0 = r0 * np.cos(theta0)
-    #                 y0 = r0 * np.sin(theta0)
-    #                 self.params = [A.item(), x0.item(), y0.item(), sigma.item()]
-    #             else:
-    #                 # Initial guess for Cartesian parameters: [A, x0, y0, sigma]
-    #                 initial_guess = [
-    #                     np.random.uniform(0.1, A0),
-    #                     np.random.uniform(-1, 1),
-    #                     np.random.uniform(-1, 1),
-    #                     sigma0,
-    #                 ]
-    #                 popt, pcov = curve_fit(
-    #                     Gaussian2DFitter.gaussian_2d_cartesian,
-    #                     (x_vals, y_vals),
-    #                     target_values,
-    #                     p0=initial_guess,
-    #                     bounds=(lower_bounds, upper_bounds),
-    #                     maxfev=2000,
-    #                 )
-    #                 self.params = popt
-    #             solved = True
-    #         except Exception as e:
-    #             attempt += 1
-    #             if attempt > 3:
-    #                 print("Fitting failed after 3 attempts:", e)
-    #     self.solved = solved
-
-    #     # In case of failure, return a fallback set of parameters.
-    #     if not solved:
-    #         self.params = [np.mean(target_values).item(), 0, 0, 100]
-    #     return self.params, solved
-
     def fit(self, x_vals, y_vals, target_values):
         """
         Fit the isotropic 2D Gaussian to the provided data, running multiple fits
@@ -214,6 +132,8 @@ class Gaussian2DFitter:
             [A, r0, theta0, sigma, intercept] (converted to Cartesian as [A, x0, y0, sigma, intercept])
         and solved is a boolean indicating whether the fit succeeded.
         """
+        self.mds = (x_vals, y_vals)
+
         max_outer_attempts = 4  # Maximum number of independent fit attempts
         convergence_tol = 0.02  # Tolerance for considering two fits "almost the same"
         stable_threshold = (
@@ -234,13 +154,13 @@ class Gaussian2DFitter:
                 theta_samples = np.arctan2(y_vals, x_vals)
                 sigma0 = max(np.std(r_samples), 1e-6)
                 # Bounds: amplitude in [-10,10], r0 in [0,1], theta0 in [-pi,pi], sigma > 0, intercept in [-10,10].
-                lower_bounds = [0, 0, -np.pi, 1e-6, -np.inf]
-                upper_bounds = [np.inf, 1.0, np.pi, 100, np.inf]
+                lower_bounds = [0, 0, -np.pi, 1e-6, -10]
+                upper_bounds = [10, 1.0, np.pi, 30, 10]
             else:
                 sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
                 # Bounds for Cartesian fit: amplitude in [-10,10], x0,y0 within [-1, 1], sigma > 0, intercept in [-10,10].
-                lower_bounds = [0, -1, -1, 1e-6, -np.inf]
-                upper_bounds = [np.inf, 1, 1, 100, np.inf]
+                lower_bounds = [0, -1, -1, 1e-6, -10]
+                upper_bounds = [10, 1, 1, 30, 10]
 
             # --- Inner loop: try up to 3 times to get a successful fit ---
             attempt = 1
@@ -251,7 +171,7 @@ class Gaussian2DFitter:
                     if self.use_polar:
                         # Initial guess for polar parameters: [A, r0, theta0, sigma, intercept]
                         initial_guess = [
-                            np.random.uniform(0.1, A0),
+                            np.random.uniform(0.01, A0),
                             np.random.uniform(0, 1),
                             np.random.uniform(-np.pi, np.pi),
                             sigma0,
@@ -279,7 +199,7 @@ class Gaussian2DFitter:
                     else:
                         # Initial guess for Cartesian parameters: [A, x0, y0, sigma, intercept]
                         initial_guess = [
-                            np.random.uniform(0.1, A0),
+                            np.random.uniform(0.01, A0),
                             np.random.uniform(-1, 1),
                             np.random.uniform(-1, 1),
                             sigma0,
@@ -474,6 +394,7 @@ class Gaussian2DFitter:
 
     def compute_noise_ceiling(self, betas_train_voxel, betas_test_voxel):
         rescaled_train_betas, _ = self.rescale(betas_train_voxel, betas_test_voxel)
+        # rescaled_train_betas = betas_train_voxel
 
         noise_ceiling = self.compute_variance(rescaled_train_betas, betas_test_voxel)
 
@@ -506,22 +427,242 @@ class Gaussian2DFitter:
 
         # noise_ceilling_all_vox[row_i] = ve_voxels
 
+    def linearly_rescale_gaussian(self, voxel_activity_test):
+        """
+        Linearly rescales the Gaussian fit to match the amplitude and offset of the test data.
+
+        Parameters:
+        voxel_activity_test (np.ndarray): The test voxel activity data to determine the scaling factors.
+
+        Returns:
+        list: Rescaled Gaussian parameters [slope, x0, y0, sigma, intercept].
+        """
+        epsilon = 0.001
+
+        # Extract parameters from the fitted Gaussian model
+        slope, x0, y0, sigma, intercept = self.params  # Unpacking parameters
+        # Initial guess for Cartesian parameters: [A, x0, y0, sigma, intercept]
+        lower_bounds = [0, x0 - epsilon, y0 - epsilon, sigma - epsilon, -np.inf]
+        upper_bounds = [np.inf, x0 + epsilon, y0 + epsilon, sigma + epsilon, np.inf]
+
+        # print(f"{self.mds=}")
+        # print(f"{self.params=}")
+
+        popt, solved = curve_fit(
+            self.gaussian_2d_cartesian,
+            self.mds,
+            voxel_activity_test,
+            p0=self.params,
+            bounds=(lower_bounds, upper_bounds),
+            maxfev=2000,
+        )
+
+        rescaled_slope, x0, y0, sigma, rescaled_intercept = popt
+
+        # Compute scaling factors based on mean voxel activity
+        # scale_slope = np.mean(voxel_activity_test) / slope  # Scale factor for amplitude
+        # delta_intercept = (
+        #     np.mean(voxel_activity_test) - intercept
+        # )  # Difference in means for offset
+
+        # # Apply scaling
+        # rescaled_slope = slope * scale_slope
+        # rescaled_intercept = intercept + delta_intercept
+
+        # Return the updated parameters with unchanged x0, y0, and sigma
+        return [rescaled_slope, x0, y0, sigma, rescaled_intercept]
+
+
+# def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
+#     rois = config.rois_to_analyze
+
+#     # mds_file = "data/mds_dir/subj_01/1_mask20_mds_sample0.npy"
+#     # mds_file = os.path.join("data/mds_dir", f"subj_{subj:02d}", f"{subj}_mask20_mds_sample0.npy")
+
+#     # TODO
+#     # - load mask
+#     # for each ROI
+#     #   - get MDS space for corresponding ROI
+#     #   - get voxels for corresponding ROI
+#     #   - fit gaussian for each voxel of ROI
+#     #   - save fit
+
+#     columns_polar = ["ecc", "pol", "sigma", "slope", "intercept"]
+#     columns = [
+#         "x0",
+#         "y0",
+#         "sigma",
+#         "slope",
+#         "intercept",
+#         "solved",
+#         "var_train",
+#         "var_test",
+#         "noise_ceiling",
+#         "model_performance",
+#     ]
+#     initial = params["initial"]
+#     bounds = params["bounds"]
+
+#     for i, subj in enumerate(subj_list):
+#         gaussian_fit_result_dir_path = os.path.join(
+#             config.gaussian_fit_results_dir, set_to_take, f"subj{subj:02d}"
+#         )
+#         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
+
+#         mask = retrieve_roi_mask(config, subj, set_to_take)
+#         betas, _ = retrieve_stacked_betas(
+#             config, subj, "averaged", 0, subj_to_check=set_to_take
+#         )
+#         betas_test = retrieve_stacked_betas_test(
+#             config, subj, subj_to_check=set_to_take
+#         )
+
+#         if np.isnan(betas).any():
+#             raise ValueError("Found NaNs")
+
+#         logging.info(f"Starting fitting for subj{subj:02d}")
+
+#         for i, roi in enumerate(list(rois.keys())):
+#             logging.info(f"Fitting for ROI {roi}")
+#             roi_mask_value = rois[roi]
+
+#             gaussian_result_file_path = os.path.join(
+#                 gaussian_fit_result_dir_path,
+#                 f"fitted_voxels_mask_{roi_mask_value}.xlsx",
+#             )
+
+#             mds_file = os.path.join(
+#                 "data/mds_dir",
+#                 set_to_take,
+#                 f"subj_{subj:02d}",
+#                 f"mask_{roi_mask_value}_averaged_mds.npy",
+#             )
+#             mds = np.load(mds_file, allow_pickle=True).astype(np.float32).T
+
+#             mask_voxel_indices = filter_roi_mask(roi_mask_value, mask)
+#             mask_voxel_indices = mask_voxel_indices[0]
+
+#             # masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
+
+#             if os.path.exists(gaussian_result_file_path):
+#                 logging.info(
+#                     f"Loading existing gaussian fit results {gaussian_result_file_path}"
+#                 )
+#                 fits_roi = pd.read_excel(gaussian_result_file_path)
+
+#             else:
+#                 fits_roi = pd.DataFrame(columns=columns)
+
+#                 for voxel_i in tqdm(mask_voxel_indices):
+#                     voxel_activity = betas[:, voxel_i]
+#                     voxel_activity_test = betas_test[:, voxel_i]
+
+#                     fitter = Gaussian2DFitter(use_polar=True)
+
+#                     x_samples, y_samples = (mds[0, :], mds[1, :])
+#                     popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
+
+#                     noise_ceiling = fitter.compute_noise_ceiling(
+#                         voxel_activity, voxel_activity_test
+#                     )
+
+#                     var_train = fitter.variance_explained(
+#                         (x_samples, y_samples), voxel_activity
+#                     )
+#                     var_test = fitter.variance_explained(
+#                         (x_samples, y_samples), voxel_activity_test
+#                     )
+
+#                     model_performance_ceiling = fitter.variance_explained_noise_ceiling(
+#                         (x_samples, y_samples), voxel_activity_test, noise_ceiling
+#                     )
+
+#                     # print(f"{var_test=}")
+
+#                     # print(f"{var_noise_ceiling=}")
+#                     # quit()
+#                     A, x0, y0, sigma, intercept = popt
+
+#                     slope = A  # Directly assigning A as amplitude
+#                     voxel_fit = [
+#                         x0,
+#                         y0,
+#                         sigma,
+#                         slope,
+#                         intercept,
+#                         solved,
+#                         var_train,
+#                         var_test,
+#                         noise_ceiling,
+#                         model_performance_ceiling,
+#                     ]
+
+#                     fits_roi.loc[voxel_i] = voxel_fit
+
+#                 # Add the current index as a new column
+#                 fits_roi["original_index"] = fits_roi.index
+
+#                 # Reset the index to 0, 1, 2, ...
+#                 fits_roi = fits_roi.reset_index(drop=True)
+
+#                 fits_roi.to_excel(gaussian_result_file_path, index=False)
+
+#             # if true - no computation needed
+#             # if "variance_explained" in fits_roi.columns:
+#             if False:
+#                 logging.info("Variance explained already computed")
+
+#             else:
+#                 # print(fits_roi.head())
+#                 logging.info("Computing variance stats")
+#                 # Stabilizer for numerical calculations (avoids division by zero)
+#                 EPSILON = 0  # 1e-8
+
+#                 required_columns = [
+#                     "x0",
+#                     "y0",
+#                     "sigma",
+#                     "slope",
+#                     "intercept",
+#                 ]  # Modify as needed
+
+#                 # Extract only the relevant voxel indices from beta values
+#                 # (n_samples, n_voxels)
+#                 masked_voxel_betas = betas.T[mask_voxel_indices].T
+#                 masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
+
+#                 var_train_stat = fits_roi["var_train"].describe()
+#                 # Calculate the positive percentile
+#                 positive_percentile = find_positive_percentile(fits_roi["var_train"])
+
+#                 # Add the custom statistic to the results
+#                 if positive_percentile is not None:
+#                     var_train_stat["positive_percentile"] = positive_percentile
+#                 else:
+#                     var_train_stat["positive_percentile"] = "No positive values"
+
+#                 print(f"Stats for train set:\n{var_train_stat}")
+
+#                 var_test_stat = fits_roi["var_test"].describe()
+#                 # Calculate the positive percentile
+#                 positive_percentile = find_positive_percentile(fits_roi["var_test"])
+
+#                 # Add the custom statistic to the results
+#                 if positive_percentile is not None:
+#                     var_test_stat["positive_percentile"] = positive_percentile
+#                 else:
+#                     var_test_stat["positive_percentile"] = "No positive values"
+
+#                 print(f"Stats for test set:\n{var_test_stat}")
+
+#                 fits_roi.to_excel(gaussian_result_file_path, index=False)
+
+#                 print("-" * 30)
+
 
 def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
     rois = config.rois_to_analyze
 
-    # mds_file = "data/mds_dir/subj_01/1_mask20_mds_sample0.npy"
-    # mds_file = os.path.join("data/mds_dir", f"subj_{subj:02d}", f"{subj}_mask20_mds_sample0.npy")
-
-    # TODO
-    # - load mask
-    # for each ROI
-    #   - get MDS space for corresponding ROI
-    #   - get voxels for corresponding ROI
-    #   - fit gaussian for each voxel of ROI
-    #   - save fit
-
-    columns_polar = ["ecc", "pol", "sigma", "slope", "intercept"]
     columns = [
         "x0",
         "y0",
@@ -531,11 +672,10 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         "solved",
         "var_train",
         "var_test",
+        "var_test_rescaled",
         "noise_ceiling",
         "model_performance",
     ]
-    initial = params["initial"]
-    bounds = params["bounds"]
 
     for i, subj in enumerate(subj_list):
         gaussian_fit_result_dir_path = os.path.join(
@@ -576,48 +716,24 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
             mask_voxel_indices = filter_roi_mask(roi_mask_value, mask)
             mask_voxel_indices = mask_voxel_indices[0]
 
-            # masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
-
             if os.path.exists(gaussian_result_file_path):
                 logging.info(
                     f"Loading existing gaussian fit results {gaussian_result_file_path}"
                 )
                 fits_roi = pd.read_excel(gaussian_result_file_path)
-
             else:
                 fits_roi = pd.DataFrame(columns=columns)
-
                 for voxel_i in tqdm(mask_voxel_indices):
                     voxel_activity = betas[:, voxel_i]
                     voxel_activity_test = betas_test[:, voxel_i]
 
                     fitter = Gaussian2DFitter(use_polar=True)
-
                     x_samples, y_samples = (mds[0, :], mds[1, :])
+
                     popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
 
-                    noise_ceiling = fitter.compute_noise_ceiling(
-                        voxel_activity, voxel_activity_test
-                    )
-
-                    var_train = fitter.variance_explained(
-                        (x_samples, y_samples), voxel_activity
-                    )
-                    var_test = fitter.variance_explained(
-                        (x_samples, y_samples), voxel_activity_test
-                    )
-
-                    model_performance_ceiling = fitter.variance_explained_noise_ceiling(
-                        (x_samples, y_samples), voxel_activity_test, noise_ceiling
-                    )
-
-                    # print(f"{var_test=}")
-
-                    # print(f"{var_noise_ceiling=}")
-                    # quit()
                     A, x0, y0, sigma, intercept = popt
-
-                    slope = A  # Directly assigning A as amplitude
+                    slope = A
                     voxel_fit = [
                         x0,
                         y0,
@@ -625,76 +741,96 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                         slope,
                         intercept,
                         solved,
-                        var_train,
-                        var_test,
-                        noise_ceiling,
-                        model_performance_ceiling,
+                        np.nan,
+                        np.nan,
+                        np.nan,
+                        np.nan,
+                        np.nan,  # Placeholders for metrics
+                        np.nan,
+                        np.nan,
                     ]
-
                     fits_roi.loc[voxel_i] = voxel_fit
 
-                # fits_roi["x0"], fits_roi["y0"] = pol2cart(
-                #     fits_roi["ecc"], fits_roi["pol"]
-                # )
-                # Add the current index as a new column
                 fits_roi["original_index"] = fits_roi.index
-
-                # Reset the index to 0, 1, 2, ...
                 fits_roi = fits_roi.reset_index(drop=True)
-
                 fits_roi.to_excel(gaussian_result_file_path, index=False)
 
-            # if true - no computation needed
-            # if "variance_explained" in fits_roi.columns:
-            if False:
-                logging.info("Variance explained already computed")
+            # Recalculate metrics for all voxels
+            logging.info("Recalculating metrics for all voxels...")
+            x_samples, y_samples = mds[0, :], mds[1, :]
+            for index, row in tqdm(
+                fits_roi.iterrows(), total=len(fits_roi), desc="Processing voxels"
+            ):
+                voxel_i = row["original_index"]
+                fitter = Gaussian2DFitter(use_polar=False)
+                fitter.mds = (x_samples, y_samples)
 
-            else:
-                # print(fits_roi.head())
-                logging.info("Computing variance stats")
-                # Stabilizer for numerical calculations (avoids division by zero)
-                EPSILON = 0  # 1e-8
+                fitter.params = [
+                    row["slope"],
+                    row["x0"],
+                    row["y0"],
+                    row["sigma"],
+                    row["intercept"],
+                ]
+                fitter.solved = row["solved"]
 
-                required_columns = [
-                    "x0",
-                    "y0",
-                    "sigma",
-                    "slope",
-                    "intercept",
-                ]  # Modify as needed
+                voxel_train = betas[:, voxel_i]
+                voxel_test = betas_test[:, voxel_i]
 
-                # Extract only the relevant voxel indices from beta values
-                # (n_samples, n_voxels)
-                masked_voxel_betas = betas.T[mask_voxel_indices].T
-                masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
+                var_train = fitter.variance_explained(
+                    (x_samples, y_samples), voxel_train
+                )
 
-                var_train_stat = fits_roi["var_train"].describe()
-                # Calculate the positive percentile
-                positive_percentile = find_positive_percentile(fits_roi["var_train"])
+                # predictions = fitter.predict((x_samples, y_samples))
+                # rescaled_predictions, _ = fitter.rescale(predictions, voxel_test)
+                # var_test = fitter.compute_variance(rescaled_predictions, voxel_test)
 
-                # Add the custom statistic to the results
-                if positive_percentile is not None:
-                    var_train_stat["positive_percentile"] = positive_percentile
-                else:
-                    var_train_stat["positive_percentile"] = "No positive values"
+                noise_ceiling = fitter.compute_noise_ceiling(voxel_train, voxel_test)
 
-                print(f"Stats for train set:\n{var_train_stat}")
+                var_test = fitter.variance_explained((x_samples, y_samples), voxel_test)
 
-                var_test_stat = fits_roi["var_test"].describe()
-                # Calculate the positive percentile
-                positive_percentile = find_positive_percentile(fits_roi["var_test"])
+                rescaled_slope, x0, y0, sigma, rescaled_intercept = (
+                    fitter.linearly_rescale_gaussian(voxel_test)
+                )
+                fitter.params = [
+                    rescaled_slope,
+                    row["x0"],
+                    row["y0"],
+                    row["sigma"],
+                    rescaled_intercept,
+                ]
+                var_test_rescaled = fitter.variance_explained(
+                    (x_samples, y_samples), voxel_test
+                )
 
-                # Add the custom statistic to the results
-                if positive_percentile is not None:
-                    var_test_stat["positive_percentile"] = positive_percentile
-                else:
-                    var_test_stat["positive_percentile"] = "No positive values"
+                model_perf = (
+                    var_test_rescaled / noise_ceiling if noise_ceiling != 0 else 0.0
+                )
 
-                print(f"Stats for test set:\n{var_test_stat}")
+                fits_roi.at[index, "var_train"] = var_train
+                fits_roi.at[index, "var_test"] = var_test
+                fits_roi.at[index, "var_test_rescaled"] = var_test_rescaled
 
-                fits_roi.to_excel(gaussian_result_file_path, index=False)
+                fits_roi.at[index, "noise_ceiling"] = noise_ceiling
+                fits_roi.at[index, "model_performance"] = model_perf
 
-                print("-" * 30)
+                fits_roi.at[index, "rescaled_slope"] = rescaled_slope
+                fits_roi.at[index, "rescaled_intercept"] = rescaled_intercept
+
+            # Compute and log stats
+            logging.info("Computing variance stats...")
+            var_train_stat = fits_roi["var_train"].describe()
+            pos_percentile = find_positive_percentile(fits_roi["var_train"])
+            var_train_stat["positive_percentile"] = pos_percentile or "No positives"
+            logging.info(f"Train stats:\n{var_train_stat}")
+
+            var_test_stat = fits_roi["var_test"].describe()
+            pos_percentile = find_positive_percentile(fits_roi["var_test"])
+            var_test_stat["positive_percentile"] = pos_percentile or "No positives"
+            logging.info(f"Test stats:\n{var_test_stat}")
+
+            fits_roi.to_excel(gaussian_result_file_path, index=False)
+            logging.info(f"Updated results saved to {gaussian_result_file_path}")
 
 
 if __name__ == "__main__":

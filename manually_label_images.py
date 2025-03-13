@@ -259,7 +259,7 @@ if __name__ == "__main__":
     faces_set = False
 
     # Adjust these paths and configuration as needed.
-    subdir = "subj_01"
+    subdir = "subj_02"
     st.title("Image Labeler")
     config = load_config(
         "config.yaml"

@@ -78,6 +78,7 @@ def t_test_results_to_mgz(
     hemis = ["lh", "rh"]
 
     subs = [f"subj{i:02d}" for i in config.subjects_to_analyze]
+    print(subs)
     mask_dir = os.path.join(config.stans_thesis_repo_data, config.mask_data_dir)
 
     if subj_to_pick_shared:
@@ -91,9 +92,9 @@ def t_test_results_to_mgz(
         logging.info(f"{sub}\t{mode=}\t{thresholding=}\t{threshold=}")
 
         if subj_to_pick_shared:
-            subj_subdir = os.path.join("shared", f"subj_{(sub_i+1):02d}")
+            subj_subdir = os.path.join("shared", f"subj_{sub[4:]}")
         else:
-            subj_subdir = f"subj_{(sub_i+1):02d}"
+            subj_subdir = f"subj_{sub[4:]}"
 
         t_data = np.load(
             os.path.join(
@@ -199,10 +200,10 @@ if __name__ == "__main__":
 
     # quit()
 
-    t_test_subdir = "subj_01"
+    t_test_subdir = "subj_02"
     subj_to_pick_shared = False
 
-    for labels_subdir in ["across"]:
+    for labels_subdir in ["face_animate"]:
         for mode in ["absolute", "signed"]:
             t_test_results_to_mgz(
                 config,
