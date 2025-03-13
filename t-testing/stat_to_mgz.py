@@ -23,21 +23,22 @@ def mutually_exclusive_t_test_export(
 ):
 
     os.makedirs(
-        os.path.join(config.t_test_results_dir, "mutually_exclusive"), exist_ok=True
+        os.path.join(config.directories.t_test_results_dir, "mutually_exclusive"),
+        exist_ok=True,
     )
 
     subj = 1
 
     face_animate_t_test_res = np.load(
         os.path.join(
-            config.t_test_results_dir,
+            config.directories.t_test_results_dir,
             face_animate_t_test_subdir,
             f"result_subj_{subj:02d}.npy",
         )
     )
     animate_nonanimate_t_test_res = np.load(
         os.path.join(
-            config.t_test_results_dir,
+            config.directories.t_test_results_dir,
             animate_nonanimate_t_test_subdir,
             f"result_subj_{subj:02d}.npy",
         )
@@ -57,7 +58,7 @@ def mutually_exclusive_t_test_export(
 
     np.save(
         os.path.join(
-            config.t_test_results_dir,
+            config.directories.t_test_results_dir,
             "mutually_exclusive",
             f"result_subj_{subj:02d}.npy",
         ),
@@ -77,9 +78,11 @@ def t_test_results_to_mgz(
 ):
     hemis = ["lh", "rh"]
 
-    subs = [f"subj{i:02d}" for i in config.subjects_to_analyze]
+    subs = [f"subj{i:02d}" for i in config.analysis.subjects_to_analyze]
     print(subs)
-    mask_dir = os.path.join(config.stans_thesis_repo_data, config.mask_data_dir)
+    mask_dir = os.path.join(
+        config.nsd_data.stans_thesis_repo_data, config.nsd_data.mask_data_dir
+    )
 
     if subj_to_pick_shared:
         shared_string = "shared"
@@ -98,7 +101,7 @@ def t_test_results_to_mgz(
 
         t_data = np.load(
             os.path.join(
-                config.t_test_results_dir,
+                config.directories.t_test_results_dir,
                 subj_subdir,
                 f"result_subj_{sub[4:]}.npy",
             )
@@ -133,14 +136,14 @@ def t_test_results_to_mgz(
             if clipping_value is None:
 
                 data_out_file = os.path.join(
-                    config.freesurfer_dir,
+                    config.nsd_data.freesurfer_dir,
                     sub,
                     "label",
                     f"{hemi}.t_test_{mode}_{str(threshold).replace('.', '_')}_label_{label}_{shared_string}.mgz",
                 )
             else:
                 data_out_file = os.path.join(
-                    config.freesurfer_dir,
+                    config.nsd_data.freesurfer_dir,
                     sub,
                     "label",
                     f"{hemi}.t_test_{mode}_{str(threshold).replace('.', '_')}_label_{label}_clip_{clipping_value}_{shared_string}.mgz",

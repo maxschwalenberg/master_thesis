@@ -16,30 +16,34 @@ logging.basicConfig(
 
 
 def generate_positive_set(config: Configuration):
-    for nsd_subj_subset in config.nsd_samples_subjects_to_check:
+    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
             nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
         logging.info(f"Generating face set for {nsd_subj_subset=}")
 
         # Create the subdirectory path and make sure it exists
-        subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
+        subdir_path = os.path.join(
+            config.directories.excel_files_target_dir, nsd_subj_subset
+        )
 
         os.makedirs(
             os.path.dirname(
-                os.path.join(subdir_path, config.subset_animate_face_unchecked)
+                os.path.join(
+                    subdir_path, config.dataset_creation.subset_animate_face_unchecked
+                )
             ),
             exist_ok=True,
         )
 
         face_detection_results_path = os.path.join(
-            subdir_path, config.face_detection_results_path
+            subdir_path, config.face_detection.results_path
         )
         with open(face_detection_results_path, "r") as f:
             detection_results = json.load(f)
 
         humans_subset_excel = pd.read_excel(
-            os.path.join(subdir_path, config.subset_animate)
+            os.path.join(subdir_path, config.dataset_creation.subset_animate)
         )
 
         total_image_area = 640 * 640
@@ -78,7 +82,7 @@ def generate_positive_set(config: Configuration):
 
         result_df = pd.DataFrame(columns=humans_subset_excel.columns)
         for e in unique:
-            img_path = os.path.join(config.images_target_dir, e[1])
+            img_path = os.path.join(config.directories.images_target_dir, e[1])
 
             # print(e)
             # n face-detections == 1
@@ -99,28 +103,32 @@ def generate_positive_set(config: Configuration):
             :, ~result_df.columns.str.contains("Unnamed", case=False, na=False)
         ]
         result_df.to_excel(
-            os.path.join(subdir_path, config.subset_animate_face_unchecked)
+            os.path.join(
+                subdir_path, config.dataset_creation.subset_animate_face_unchecked
+            )
         )
 
 
 def generate_animate_non_face(config: Configuration):
-    for nsd_subj_subset in config.nsd_samples_subjects_to_check:
+    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
             nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
         logging.info(f"Generating animate-non-face set for {nsd_subj_subset=}")
 
         # Create the subdirectory path and make sure it exists
-        subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
+        subdir_path = os.path.join(
+            config.directories.excel_files_target_dir, nsd_subj_subset
+        )
 
         face_detection_results_path = os.path.join(
-            subdir_path, config.face_detection_results_path
+            subdir_path, config.face_detection.results_path
         )
         with open(face_detection_results_path, "r") as f:
             detection_results = json.load(f)
 
         humans_subset_excel = pd.read_excel(
-            os.path.join(subdir_path, config.subset_animate)
+            os.path.join(subdir_path, config.dataset_creation.subset_animate)
         )
 
         total_image_area = 640 * 640
@@ -171,15 +179,20 @@ def generate_animate_non_face(config: Configuration):
 
         os.makedirs(
             os.path.dirname(
-                os.path.join(subdir_path, config.subset_animate_non_face_unchecked)
+                os.path.join(
+                    subdir_path,
+                    config.dataset_creation.subset_animate_non_face_unchecked,
+                )
             ),
             exist_ok=True,
         )
         logging.info(
-            f"Saving to {os.path.join(subdir_path, config.subset_animate_non_face_unchecked)}"
+            f"Saving to {os.path.join(subdir_path, config.dataset_creation.subset_animate_non_face_unchecked)}"
         )
         result_df.to_excel(
-            os.path.join(subdir_path, config.subset_animate_non_face_unchecked)
+            os.path.join(
+                subdir_path, config.dataset_creation.subset_animate_non_face_unchecked
+            )
         )
 
 

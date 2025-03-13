@@ -66,7 +66,7 @@ class NSDProject:
 @dataclass
 class Analysis:
     subjects_to_analyze: List[int]
-    rois_to_analyze: List[int]  # Now a list instead of a dictionary
+    rois_to_analyze: Dict[str, int]  # Now a list instead of a dictionary
 
 
 @dataclass

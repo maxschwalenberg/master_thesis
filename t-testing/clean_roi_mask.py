@@ -30,7 +30,7 @@ def modify_mask_with_ttest(
         t_test_results_subdir: Optional subdirectory for t-test results
     """
     hemis = ["lh", "rh"]
-    mask_dir = os.path.join(config.t_test_roi_dir)
+    mask_dir = os.path.join(config.directories.t_test_roi_dir)
     if subj_to_pick_shared:
         mask_dir = os.path.join(mask_dir, "shared")
     else:
@@ -68,7 +68,7 @@ def modify_mask_with_ttest(
 
     t_data = np.load(
         os.path.join(
-            config.t_test_results_dir,
+            config.directories.t_test_results_dir,
             subj_subdir,
             f"result_subj_{subj_to_pick:02d}.npy",
         )

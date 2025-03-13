@@ -28,22 +28,24 @@ def generate_face_detection_results(config: Configuration):
         name="buffalo_l",
     )
     app.prepare(ctx_id=0, det_size=(640, 640))
-    for nsd_subj_subset in config.nsd_samples_subjects_to_check:
+    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
             nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
 
         logging.info(f"Distribution for {nsd_subj_subset}...")
-        subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
+        subdir_path = os.path.join(
+            config.directories.excel_files_target_dir, nsd_subj_subset
+        )
 
         faces_dataset_split = pd.read_excel(
-            os.path.join(subdir_path, config.subset_animate)
+            os.path.join(subdir_path, config.dataset_creation.subset_animate)
         )
 
         detection_results = []
 
         face_det_results_path = os.path.join(
-            subdir_path, config.face_detection_results_path
+            subdir_path, config.face_detection.results_path
         )
 
         if os.path.exists(face_det_results_path):
@@ -65,7 +67,7 @@ def generate_face_detection_results(config: Configuration):
             res = {}
 
             filename = os.path.basename(row["file_name"])
-            img_path = os.path.join(config.images_target_dir, filename)
+            img_path = os.path.join(config.directories.images_target_dir, filename)
 
             if filename in checked_files:
                 continue

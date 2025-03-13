@@ -112,7 +112,7 @@ def save_labels(df, target_path):
     st.success(f"Labeled data saved to {target_path}")
 
 
-def label_images(config, df_to_check_path: str, target_path: str):
+def label_images(config: Configuration, df_to_check_path: str, target_path: str):
     # Read the Excel file with the full image metadata.
     df = pd.read_excel(df_to_check_path)
 
@@ -215,7 +215,7 @@ def label_images(config, df_to_check_path: str, target_path: str):
     # --- Load and display the current image ---
     row = df.iloc[st.session_state.current_index]
     image_filename = os.path.basename(row["file_name"])
-    img_path = os.path.join(config.images_target_dir, image_filename)
+    img_path = os.path.join(config.directories.images_target_dir, image_filename)
     image = cv2.imread(img_path)
     if image is None:
         st.write(f"Could not read image: {img_path}")
@@ -267,23 +267,25 @@ if __name__ == "__main__":
 
     if faces_set:
         df_to_check_path = os.path.join(
-            config.excel_files_target_dir,
+            config.directories.excel_files_target_dir,
             subdir,
-            config.subset_animate_face_nans_removed,
+            config.dataset_creation.subset_animate_face_nans_removed,
         )
         target_path = os.path.join(
-            config.excel_files_target_dir, subdir, config.subset_animate_face_labelled
+            config.directories.excel_files_target_dir,
+            subdir,
+            config.dataset_creation.subset_animate_face_labelled,
         )
     else:
         df_to_check_path = os.path.join(
-            config.excel_files_target_dir,
+            config.directories.excel_files_target_dir,
             subdir,
-            config.subset_animate_non_face_nans_removed,
+            config.dataset_creation.subset_animate_non_face_nans_removed,
         )
         target_path = os.path.join(
-            config.excel_files_target_dir,
+            config.directories.excel_files_target_dir,
             subdir,
-            config.subset_animate_non_face_labelled,
+            config.dataset_creation.subset_animate_non_face_labelled,
         )
 
     label_images(config, df_to_check_path, target_path)

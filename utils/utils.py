@@ -19,10 +19,14 @@ logging.basicConfig(
 
 def retrieve_roi_mask(config: Configuration, subject: int, subj_to_check: str):
     mask_path_lh = os.path.join(
-        config.t_test_roi_dir, subj_to_check, f"lh.subj{subject:02d}.cleanedrois.mgz"
+        config.directories.t_test_roi_dir,
+        subj_to_check,
+        f"lh.subj{subject:02d}.cleanedrois.mgz",
     )
     mask_path_rh = os.path.join(
-        config.t_test_roi_dir, subj_to_check, f"rh.subj{subject:02d}.cleanedrois.mgz"
+        config.directories.t_test_roi_dir,
+        subj_to_check,
+        f"rh.subj{subject:02d}.cleanedrois.mgz",
     )
     logging.info(f"Loading mask from\n{mask_path_lh}\n{mask_path_rh}")
 
@@ -51,17 +55,17 @@ def retrieve_stacked_betas(
     assert mode in ["averaged", "single"]
 
     if label_subset_name is None:
-        label_subset_name = config.subset_animate_face_final
+        label_subset_name = config.dataset_creation.subset_animate_face_final
 
     logging.info(f"Loading from {label_subset_name}")
 
-    betas_dir = config.image_betas_dir
+    betas_dir = config.directories.image_betas_dir
 
     data = []
     image_ids = []
 
     set_excel_path = os.path.join(
-        config.excel_files_target_dir, subj_to_check, label_subset_name
+        config.directories.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
     subset = pd.read_excel(set_excel_path)
@@ -101,15 +105,15 @@ def retrieve_stacked_betas_test(
     subj_to_check="shared",
     label_subset_name: str = None,
 ):
-    betas_dir = config.image_betas_dir
+    betas_dir = config.directories.image_betas_dir
 
     data = []
 
     if label_subset_name is None:
-        label_subset_name = config.subset_animate_face_final
+        label_subset_name = config.dataset_creation.subset_animate_face_final
 
     positive_set_excel_path = os.path.join(
-        config.excel_files_target_dir, subj_to_check, label_subset_name
+        config.directories.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
     positive_subset = pd.read_excel(positive_set_excel_path)

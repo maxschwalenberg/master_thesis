@@ -9,7 +9,7 @@ config = load_config("config.yaml")
 
 
 # Use the image directory from your configuration
-IMAGE_FOLDER = config.images_target_dir
+IMAGE_FOLDER = config.directories.images_target_dir
 
 # List image files (filtering for common image extensions)
 df = pd.read_excel("data/labels/subj_01/faces/faces_final.xlsx")

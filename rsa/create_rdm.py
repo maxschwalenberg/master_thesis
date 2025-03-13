@@ -42,7 +42,7 @@ def create_rdm(
 
     logging.info(f"Creating RDM for mode {mode}")
     logging.info(
-        f"Using positive set: {os.path.join(set_to_take, config.subset_animate_face_final)}"
+        f"Using positive set: {os.path.join(set_to_take, config.dataset_creation.subset_animate_face_final)}"
     )
 
     if mode == "single":
@@ -51,12 +51,12 @@ def create_rdm(
     for i, sub in enumerate(list_subj):
 
         mask_path_lh = os.path.join(
-            config.t_test_roi_dir,
+            config.directories.t_test_roi_dir,
             set_to_take,
             f"lh.subj{sub:02d}.cleanedrois.mgz",
         )
         mask_path_rh = os.path.join(
-            config.t_test_roi_dir,
+            config.directories.t_test_roi_dir,
             set_to_take,
             f"rh.subj{sub:02d}.cleanedrois.mgz",
         )
@@ -87,7 +87,9 @@ def create_rdm(
         else:
             raise ValueError()
 
-        rdm_dir = os.path.join(config.rdm_dir, set_to_take, f"subj_{sub:02d}")
+        rdm_dir = os.path.join(
+            config.directories.rdm_dir, set_to_take, f"subj_{sub:02d}"
+        )
         os.makedirs(rdm_dir, exist_ok=True)
 
         if mode == "averaged":
@@ -98,9 +100,11 @@ def create_rdm(
                 f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_rdm.npy",
             )
 
-        mds_dir = os.path.join(config.mds_dir, set_to_take, f"subj_{sub:02d}")
+        mds_dir = os.path.join(
+            config.directories.mds_dir, set_to_take, f"subj_{sub:02d}"
+        )
         metadata_file = os.path.join(
-            config.rdm_dir, set_to_take, f"subj_{sub:02d}", "metadata.npy"
+            config.directories.rdm_dir, set_to_take, f"subj_{sub:02d}", "metadata.npy"
         )
         logging.info(f"{len(image_ids)=}")
         np.save(metadata_file, image_ids)
@@ -311,6 +315,6 @@ if __name__ == "__main__":
     set_to_take = "subj_01"
 
     config = load_config("config.yaml")
-    mask_values = list(config.rois_to_analyze.values())
+    mask_values = list(config.analysis.rois_to_analyze.values())
     for mask_value in mask_values:
         create_rdm(config, [1], mask_value, set_to_take, mode="averaged")

@@ -67,7 +67,10 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
     if shared_set:
         with open(
-            os.path.join(config.excel_files_target_dir, "missing_subjects.json"), "r"
+            os.path.join(
+                config.directories.excel_files_target_dir, "missing_subjects.json"
+            ),
+            "r",
         ) as f:
             missing_subjects = json.load(f)
     else:
@@ -77,9 +80,9 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
         if shared_set:
             positive_set_excel = pd.read_excel(
                 os.path.join(
-                    config.excel_files_target_dir,
+                    config.directories.excel_files_target_dir,
                     "shared",
-                    config.subset_animate_face_final,
+                    config.dataset_creation.subset_animate_face_final,
                 )
             )
             positive_set_filenames = positive_set_excel["file_name"].tolist()
@@ -89,9 +92,9 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
             negative_set_excel = pd.read_excel(
                 os.path.join(
-                    config.excel_files_target_dir,
+                    config.directories.excel_files_target_dir,
                     "shared",
-                    config.subset_animate_non_face_final,
+                    config.dataset_creation.subset_animate_non_face_final,
                 )
             )
             negative_set_filenames = negative_set_excel["file_name"].tolist()
@@ -101,9 +104,9 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
         else:
             positive_set_excel = pd.read_excel(
                 os.path.join(
-                    config.excel_files_target_dir,
+                    config.directories.excel_files_target_dir,
                     f"subj_{selected_subj:02d}",
-                    config.subset_animate_face_final,
+                    config.dataset_creation.subset_animate_face_final,
                 )
             )
             positive_set_filenames = positive_set_excel["file_name"].tolist()
@@ -113,9 +116,9 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
             negative_set_excel = pd.read_excel(
                 os.path.join(
-                    config.excel_files_target_dir,
+                    config.directories.excel_files_target_dir,
                     f"subj_{selected_subj:02d}",
-                    config.subset_animate_non_face_final,
+                    config.dataset_creation.subset_animate_non_face_final,
                 )
             )
             negative_set_filenames = negative_set_excel["file_name"].tolist()
@@ -134,7 +137,7 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
                     )
                     continue
 
-            path = os.path.join(config.image_betas_dir, file_name)
+            path = os.path.join(config.directories.image_betas_dir, file_name)
             subj_path = os.path.join(path, f"subj_{selected_subj:02d}")
 
             files = glob.glob(os.path.join(subj_path, "*.npy"))
@@ -165,7 +168,7 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
                     )
                     continue
 
-            path = os.path.join(config.image_betas_dir, file_name)
+            path = os.path.join(config.directories.image_betas_dir, file_name)
             subj_path = os.path.join(path, f"subj_{selected_subj:02d}")
 
             files = glob.glob(os.path.join(subj_path, "*.npy"))
@@ -212,10 +215,12 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
         voxel_results = np.array(voxel_results)
 
         if shared_set:
-            results_file_path = os.path.join(config.t_test_results_dir, "shared")
+            results_file_path = os.path.join(
+                config.directories.t_test_results_dir, "shared"
+            )
         else:
             results_file_path = os.path.join(
-                config.t_test_results_dir, f"subj_{selected_subj:02d}"
+                config.directories.t_test_results_dir, f"subj_{selected_subj:02d}"
             )
 
         os.makedirs(results_file_path, exist_ok=True)
@@ -230,5 +235,5 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 if __name__ == "__main__":
     shared = False
     config = load_config("config.yaml")
-    subjects_to_use = config.subjects_to_analyze
+    subjects_to_use = config.analysis.subjects_to_analyze
     set_t_testing(config, subjects_to_use, shared)

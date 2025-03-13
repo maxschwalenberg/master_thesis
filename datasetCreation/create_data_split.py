@@ -48,17 +48,25 @@ def get_coco_image_labels(image_id, coco_instance: COCO):
 def filter_full_nsd_df(df: pd.DataFrame, config: Configuration):
     conditions = []
 
-    if "shared" in config.nsd_samples_subjects_to_check:
+    if "shared" in config.dataset_validation.nsd_samples_subjects_to_check:
         conditions.append(("amount_participants", {8}))
 
         # Erstelle eine neue Liste ohne "shared"
         subjects = {
-            int(s) for s in config.nsd_samples_subjects_to_check if s != "shared"
+            int(s)
+            for s in config.dataset_validation.nsd_samples_subjects_to_check
+            if s != "shared"
         }
         conditions.append(("subject", subjects))
     else:
         conditions.append(
-            ("subject", {int(s) for s in config.nsd_samples_subjects_to_check})
+            (
+                "subject",
+                {
+                    int(s)
+                    for s in config.dataset_validation.nsd_samples_subjects_to_check
+                },
+            )
         )
 
     # Filtere die DataFrame-Zeilen basierend auf den Bedingungen
@@ -83,22 +91,25 @@ def extract_subj_nsd_df(df: pd.DataFrame, subj: str):
 def download_data(config: Configuration):
     logging.info("Processing coco train...")
 
-    with open(config.coco_train_json_path, "r") as f:
+    with open(config.coco_data.coco_train_json_path, "r") as f:
         info = json.load(f)
 
-    coco_train = COCO(config.coco_train_json_path)
+    coco_train = COCO(config.coco_data.coco_train_json_path)
 
     info = info["images"]
 
     logging.info("Processing coco val...")
-    with open(config.coco_val_json_path, "r") as f:
+    with open(config.coco_data.coco_val_json_path, "r") as f:
         info = json.load(f)
 
-    coco_val = COCO(config.coco_val_json_path)
+    coco_val = COCO(config.coco_data.coco_val_json_path)
 
     # --> find jpgs --> get corresponding url
     df = pd.read_excel(
-        os.path.join(config.excel_files_target_dir, config.nsd_coco_file_path)
+        os.path.join(
+            config.directories.excel_files_target_dir,
+            config.coco_data.nsd_coco_file_path,
+        )
     )
     df = filter_full_nsd_df(df, config)
 
@@ -130,7 +141,10 @@ def download_data(config: Configuration):
     if need_to_label:
         df["labels"] = labels
         df.to_excel(
-            os.path.join(config.excel_files_target_dir, config.nsd_labeled_subset_path),
+            os.path.join(
+                config.directories.excel_files_target_dir,
+                config.coco_data.nsd_labeled_subset_path,
+            ),
             index=False,
         )
 
@@ -139,15 +153,18 @@ def download_data(config: Configuration):
         parsed_url = urlparse(urls[i])
         filename = os.path.basename(parsed_url.path)
 
-        if os.path.exists(os.path.join(config.images_target_dir, filename)):
+        if os.path.exists(os.path.join(config.directories.images_target_dir, filename)):
             continue
         else:
-            wget.download(urls[i], out=config.images_target_dir)
+            wget.download(urls[i], out=config.directories.images_target_dir)
 
 
 def create_data_split(config: Configuration):
     full_dataset = pd.read_excel(
-        os.path.join(config.excel_files_target_dir, config.nsd_labeled_subset_path)
+        os.path.join(
+            config.directories.excel_files_target_dir,
+            config.coco_data.nsd_labeled_subset_path,
+        )
     )
 
     full_dataset = filter_full_nsd_df(full_dataset, config)
@@ -156,7 +173,7 @@ def create_data_split(config: Configuration):
 
     print(full_dataset.describe())
 
-    for nsd_subj_subset in config.nsd_samples_subjects_to_check:
+    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
         filtered_df = extract_subj_nsd_df(full_dataset, nsd_subj_subset)
 
         # Create subject folder name if necessary
@@ -166,12 +183,16 @@ def create_data_split(config: Configuration):
         logging.info(f"Distribution for {nsd_subj_subset}...")
 
         # Create the subdirectory path and make sure it exists
-        subdir_path = os.path.join(config.excel_files_target_dir, nsd_subj_subset)
+        subdir_path = os.path.join(
+            config.directories.excel_files_target_dir, nsd_subj_subset
+        )
         os.makedirs(subdir_path, exist_ok=True)
 
         # Create file paths for the two Excel files
-        animals_path = os.path.join(subdir_path, config.subset_animate)
-        non_animals_path = os.path.join(subdir_path, config.subset_non_animate)
+        animals_path = os.path.join(subdir_path, config.dataset_creation.subset_animate)
+        non_animals_path = os.path.join(
+            subdir_path, config.dataset_creation.subset_non_animate
+        )
 
         # Assume that if the animals file exists, both splits exist.
         if os.path.exists(animals_path):

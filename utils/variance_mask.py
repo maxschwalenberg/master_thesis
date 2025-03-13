@@ -27,14 +27,14 @@ def create_variance_mask(
         subj_to_pick: Subject ID number to process
     """
     hemis = ["lh", "rh"]
-    mask_dir = config.t_test_roi_dir
+    mask_dir = config.directories.t_test_roi_dir
 
     # Calculate the directory path once
     subset = "shared" if subj_to_pick_shared else f"subj_{subj_to_pick:02d}"
 
     # Load all Excel files in one pass
     gaussian_results_dir = os.path.join(
-        config.gaussian_fit_results_dir,
+        config.directories.gaussian_fit_results_dir,
         f"subj_{subj_to_pick:02d}",
         f"subj{subj_to_pick:02d}",
     )
@@ -58,7 +58,7 @@ def create_variance_mask(
             mask_dir, subset, f"{hemi}.subj{subj_to_pick:02d}.testrois.mgz"
         )
         data_out_file = os.path.join(
-            config.freesurfer_dir,
+            config.nsd_data.freesurfer_dir,
             f"subj{subj_to_pick:02d}",
             "label",
             f"{hemi}.variance_map.mgz",

@@ -65,7 +65,8 @@ nsd_project:
 # Subjects and ROIs to analyze
 analysis:
   subjects_to_analyze: [2] # [1, 2, 3, 7]
-  rois_to_analyze: [1, 2, 3, 4, 5, 6, 7, 8] # Now a list
+  rois_to_analyze:
+    { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8 }
 
 # Dataset validation parameters
 dataset_validation:
