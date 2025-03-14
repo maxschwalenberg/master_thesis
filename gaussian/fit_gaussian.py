@@ -661,7 +661,7 @@ class Gaussian2DFitter:
 
 
 def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
-    rois = config.rois_to_analyze
+    rois = config.analysis.rois_to_analyze
 
     columns = [
         "x0",
@@ -675,11 +675,13 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         "var_test_rescaled",
         "noise_ceiling",
         "model_performance",
+        "rescaled_slope",
+        "rescaled_intercept",
     ]
 
     for i, subj in enumerate(subj_list):
         gaussian_fit_result_dir_path = os.path.join(
-            config.gaussian_fit_results_dir, set_to_take, f"subj{subj:02d}"
+            config.directories.gaussian_fit_results_dir, set_to_take, f"subj{subj:02d}"
         )
         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
 

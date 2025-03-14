@@ -4,13 +4,23 @@ import nibabel as nib
 import h5py as h5
 import psutil
 from tqdm import tqdm
-from utils.config import load_config
+from utils.config import load_config, Configuration
+from utils.utils import subjects_list_unifier, logging_message
+
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 # Laden der Konfiguration
 config = load_config("config.yaml")
 
 # Globale Parameter
-SUBJECTS = range(1, 9)  # Subjects 1 bis 8
+SUBJECTS = range(1, 2)  # Subjects 1 bis 8
 SESSIONS = range(1, 41)  # Sessions 1 bis 40
 PERCENTILE = 60  # Perzentil für globale Normalisierung
 
@@ -163,7 +173,20 @@ def concatenate_subject_sessions(subject):
     print(f"Gespeicherte Datei: {concatenated_file_path} im kompatiblen `.npy`-Format")
 
 
+def extract_nsd_data(config: Configuration):
+    subject_list = subjects_list_unifier(
+        config.pipeline.step_1_preprocessing.subjects, True
+    )
+
+    if config.pipeline.step_1_preprocessing.extract_nsd_data:
+        logging.info(logging_message(1, "Starting *NSD preprocessing and extraction*"))
+        for subject in subject_list:
+            process_subject(subject)
+            concatenate_subject_sessions(subject)
+    else:
+        logging.info(logging_message(1, "Skipping *NSD preprocessing and extraction*"))
+
+
 if __name__ == "__main__":
     for subject in SUBJECTS:
-        process_subject(subject)
-        concatenate_subject_sessions(subject)
+        extract_nsd_data(subject)

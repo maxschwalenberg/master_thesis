@@ -77,6 +77,7 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
         missing_subjects = {}
 
     for selected_subj in tqdm(subjs_to_use):
+        logging.info(f"Generating for subject {selected_subj}")
         if shared_set:
             positive_set_excel = pd.read_excel(
                 os.path.join(

@@ -135,7 +135,6 @@ def save_betas_single_image_improved(
         logging.info("Required files already existent - returning!")
         return
 
-    logging.info(f"Load full brain data for subject {subject_id}")
     # path = os.path.join("/media/harveylab/STORAGE1_NA/NSD/full_brain/subj01", "full_betas_subj01.npy")
     full_brain_data_path = os.path.join(
         config.nsd_data.full_brain_data_dir,
@@ -143,13 +142,19 @@ def save_betas_single_image_improved(
         f"full_betas_subj{subject_id:02d}.npy",
     )
 
-    full_brain_data = np.load(full_brain_data_path)
+    logging.info(f"Load full brain data for subject {subject_id} - {full_brain_data_path}")
+
+    full_brain_data = np.load(full_brain_data_path, allow_pickle=False)
+
+
     logging.info("Loading finished")
-    full_brain_data = full_brain_data.T
+    #full_brain_data = full_brain_data.T
     logging.info("Transposing finished")
 
     # testing
     # full_brain_data = np.zeros((tsv_data.shape[0], 1))
+    print(tsv_data.shape)
+    print(full_brain_data.shape)
 
     assert tsv_data.shape[0] == full_brain_data.shape[0]
 

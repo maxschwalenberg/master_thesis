@@ -64,3 +64,14 @@
 - allow rescaling of fitted gaussian
 
 improved and more conclusive statistical testing: https://www.sciencedirect.com/science/article/pii/S089662732100845X
+
+rescaling on V1
+
+I am working with the Natural Scenes Dataset of fmri data. I am performing various experiments. It is important that I am able to have nice preprocessed data. However, I have some problems - participants having seen an image leads to a neural response which is captured using fmri (bold). Wouldnt it be expected that the same image results in a similar stimulus?
+
+My analysis so far is not really complying with this. How can I align responses to the same stimuli to one another?
+
+so in essence I need insights into the following:
+
+- how well does fmri reflect the neural responses? what are the disadvantages and what noisiness/false responses is there to be excpeted
+- how can neural responses (fmri) be aligned to each other? what is the state of the art or how are people doing it generally?

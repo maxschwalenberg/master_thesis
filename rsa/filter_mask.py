@@ -10,12 +10,12 @@ def filter_mask_t_test(config: Configuration, list_subj: list[int], threshold: f
     for i, sub in enumerate(list_subj):
 
         mask_path_lh = os.path.join(
-            config.t_test_roi_dir,
+            config.directories.t_test_roi_dir,
             "face_animate",
             f"lh.subj{sub:02d}.testrois.mgz",
         )
         mask_path_rh = os.path.join(
-            config.t_test_roi_dir,
+            config.directories.t_test_roi_dir,
             "face_animate",
             f"rh.subj{sub:02d}.testrois.mgz",
         )
@@ -29,7 +29,9 @@ def filter_mask_t_test(config: Configuration, list_subj: list[int], threshold: f
         mask = np.concatenate((mask_lh, mask_rh)).astype(int)
 
         t_test_result_path = os.path.join(
-            config.t_test_results_dir, "face_animate", f"result_subj_{sub:02d}.npy"
+            config.directories.t_test_results_dir,
+            "face_animate",
+            f"result_subj_{sub:02d}.npy",
         )
         t_test_result = np.load(t_test_result_path)
 

@@ -4,6 +4,60 @@ from typing import List, Dict
 
 
 @dataclass
+class PreprocessingConfig:
+    extract_nsd_data: bool
+    subjects: List[str]  # List of subjects, including "shared"
+    step: int
+
+
+@dataclass
+class DatasetCreationConfig:
+    download_data: bool
+    create_data_split: bool
+    face_detection: bool
+    generate_non_face_set: bool
+    generate_positive_set: bool
+    remove_nans: bool
+    label_data: bool
+    load_betas: bool
+    subjects: List[str]
+    step: int
+
+
+@dataclass
+class TTestingConfig:
+    t_testing: bool
+    step: int
+    subjects: List[str]
+
+    thresholds_map: List[float]
+    clipping_value: int
+
+
+@dataclass
+class RSAAnalysisConfig:
+    rsa_analysis: bool
+    step: int
+    subjects: List[str]
+
+
+@dataclass
+class GaussianFittingConfig:
+    fit_gaussian: bool
+    step: int
+    subjects: List[str]
+
+
+@dataclass
+class PipelineConfig:
+    step_1_preprocessing: PreprocessingConfig
+    step_2_dataset_creation: DatasetCreationConfig
+    step_3_t_testing: TTestingConfig
+    step_4_rsa_analysis: RSAAnalysisConfig
+    step_5_gaussian_fitting: GaussianFittingConfig
+
+
+@dataclass
 class Directories:
     images_target_dir: str
     excel_files_target_dir: str
@@ -84,6 +138,7 @@ class Configuration:
     nsd_project: NSDProject
     analysis: Analysis
     dataset_validation: DatasetValidation
+    pipeline: PipelineConfig  # Add the pipeline configuration
 
 
 def load_config(config_file_path: str) -> Configuration:
@@ -99,6 +154,23 @@ def load_config(config_file_path: str) -> Configuration:
         nsd_project=NSDProject(**config_data["nsd_project"]),
         analysis=Analysis(**config_data["analysis"]),
         dataset_validation=DatasetValidation(**config_data["dataset_validation"]),
+        pipeline=PipelineConfig(
+            step_1_preprocessing=PreprocessingConfig(
+                **config_data["pipeline"]["step_1_preprocessing"]
+            ),
+            step_2_dataset_creation=DatasetCreationConfig(
+                **config_data["pipeline"]["step_2_dataset_creation"]
+            ),
+            step_3_t_testing=TTestingConfig(
+                **config_data["pipeline"]["step_3_t_testing"]
+            ),
+            step_4_rsa_analysis=RSAAnalysisConfig(
+                **config_data["pipeline"]["step_4_rsa_analysis"]
+            ),
+            step_5_gaussian_fitting=GaussianFittingConfig(
+                **config_data["pipeline"]["step_5_gaussian_fitting"]
+            ),
+        ),
     )
 
     # Ensure dataset validation settings are correct

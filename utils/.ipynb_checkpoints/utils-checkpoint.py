@@ -17,35 +17,12 @@ logging.basicConfig(
 )
 
 
-def logging_message(step: int, message: str):
-    return f"Pipeline (S={step}): {message}"
-
-
-def subjects_list_unifier(subjects_list: list, reduce_shared: bool):
-    # check validity
-    assert not (
-        set(subjects_list) - {"shared", 1, 2, 3, 4, 5, 6, 7, 8}
-    ), f"Invalid subjects specification: {subjects_list}"
-
-    if reduce_shared:
-        if "shared" in subjects_list:
-            return list(range(1, 8 + 1))
-        else:
-            return subjects_list
-    else:
-        return subjects_list
-
-
 def retrieve_roi_mask(config: Configuration, subject: int, subj_to_check: str):
     mask_path_lh = os.path.join(
-        config.directories.t_test_roi_dir,
-        subj_to_check,
-        f"lh.subj{subject:02d}.cleanedrois.mgz",
+        config.t_test_roi_dir, subj_to_check, f"lh.subj{subject:02d}.cleanedrois.mgz"
     )
     mask_path_rh = os.path.join(
-        config.directories.t_test_roi_dir,
-        subj_to_check,
-        f"rh.subj{subject:02d}.cleanedrois.mgz",
+        config.t_test_roi_dir, subj_to_check, f"rh.subj{subject:02d}.cleanedrois.mgz"
     )
     logging.info(f"Loading mask from\n{mask_path_lh}\n{mask_path_rh}")
 
@@ -74,17 +51,17 @@ def retrieve_stacked_betas(
     assert mode in ["averaged", "single"]
 
     if label_subset_name is None:
-        label_subset_name = config.dataset_creation.subset_animate_face_final
+        label_subset_name = config.subset_animate_face_final
 
     logging.info(f"Loading from {label_subset_name}")
 
-    betas_dir = config.directories.image_betas_dir
+    betas_dir = config.image_betas_dir
 
     data = []
     image_ids = []
 
     set_excel_path = os.path.join(
-        config.directories.excel_files_target_dir, subj_to_check, label_subset_name
+        config.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
     subset = pd.read_excel(set_excel_path)
@@ -95,9 +72,7 @@ def retrieve_stacked_betas(
         image_ids.append(entry)
 
         npy_files = sorted(
-            glob.glob(
-                os.path.join(betas_dir, entry, f"subj_{subj:02d}", "full.betas_*.npy")
-            )
+            glob.glob(os.path.join(betas_dir, entry, f"subj_{subj:02d}", "*.npy"))
         )
 
         if len(npy_files) == 0:
@@ -124,15 +99,15 @@ def retrieve_stacked_betas_test(
     subj_to_check="shared",
     label_subset_name: str = None,
 ):
-    betas_dir = config.directories.image_betas_dir
+    betas_dir = config.image_betas_dir
 
     data = []
 
     if label_subset_name is None:
-        label_subset_name = config.dataset_creation.subset_animate_face_final
+        label_subset_name = config.subset_animate_face_final
 
     positive_set_excel_path = os.path.join(
-        config.directories.excel_files_target_dir, subj_to_check, label_subset_name
+        config.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
     positive_subset = pd.read_excel(positive_set_excel_path)

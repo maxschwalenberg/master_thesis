@@ -13,6 +13,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from utils.config import Configuration, load_config
+from utils.utils import subjects_list_unifier, logging_message
 import logging
 
 logging.basicConfig(
@@ -23,15 +24,35 @@ logging.basicConfig(
 
 
 def generate_face_detection_results(config: Configuration):
+    if config.pipeline.step_2_dataset_creation.face_detection:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Starting face detection",
+            )
+        )
+    else:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Skipping face detection",
+            )
+        )
+        return
+
+    subjects = subjects_list_unifier(
+        config.pipeline.step_2_dataset_creation.subjects, False
+    )
+
     app = FaceAnalysis(
         providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         name="buffalo_l",
     )
     app.prepare(ctx_id=0, det_size=(640, 640))
-    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
+    for nsd_subj_subset in subjects:
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
-            nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
+            nsd_subj_subset = f"subj_{nsd_subj_subset:02d}"
 
         logging.info(f"Distribution for {nsd_subj_subset}...")
         subdir_path = os.path.join(

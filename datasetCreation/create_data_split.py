@@ -6,6 +6,7 @@ import os
 
 
 from utils.config import Configuration, load_config
+from utils.utils import logging_message, subjects_list_unifier
 
 import logging
 from tqdm import tqdm
@@ -48,25 +49,17 @@ def get_coco_image_labels(image_id, coco_instance: COCO):
 def filter_full_nsd_df(df: pd.DataFrame, config: Configuration):
     conditions = []
 
-    if "shared" in config.dataset_validation.nsd_samples_subjects_to_check:
+    if "shared" in config.nsd_samples_subjects_to_check:
         conditions.append(("amount_participants", {8}))
 
         # Erstelle eine neue Liste ohne "shared"
         subjects = {
-            int(s)
-            for s in config.dataset_validation.nsd_samples_subjects_to_check
-            if s != "shared"
+            int(s) for s in config.nsd_samples_subjects_to_check if s != "shared"
         }
         conditions.append(("subject", subjects))
     else:
         conditions.append(
-            (
-                "subject",
-                {
-                    int(s)
-                    for s in config.dataset_validation.nsd_samples_subjects_to_check
-                },
-            )
+            ("subject", {int(s) for s in config.nsd_samples_subjects_to_check})
         )
 
     # Filtere die DataFrame-Zeilen basierend auf den Bedingungen
@@ -89,6 +82,21 @@ def extract_subj_nsd_df(df: pd.DataFrame, subj: str):
 
 
 def download_data(config: Configuration):
+
+    if config.pipeline.step_2_dataset_creation.download_data:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step, "Starting image download"
+            )
+        )
+    else:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step, "Skipping image download"
+            )
+        )
+        return
+
     logging.info("Processing coco train...")
 
     with open(config.coco_data.coco_train_json_path, "r") as f:
@@ -160,6 +168,26 @@ def download_data(config: Configuration):
 
 
 def create_data_split(config: Configuration):
+    if config.pipeline.step_2_dataset_creation.create_data_split:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Starting data split generation",
+            )
+        )
+    else:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Skipping data split generation",
+            )
+        )
+        return
+
+    subjects = subjects_list_unifier(
+        config.pipeline.step_2_dataset_creation.subjects, False
+    )
+
     full_dataset = pd.read_excel(
         os.path.join(
             config.directories.excel_files_target_dir,
@@ -169,16 +197,12 @@ def create_data_split(config: Configuration):
 
     full_dataset = filter_full_nsd_df(full_dataset, config)
 
-    print(full_dataset)
-
-    print(full_dataset.describe())
-
-    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
+    for nsd_subj_subset in subjects:
         filtered_df = extract_subj_nsd_df(full_dataset, nsd_subj_subset)
 
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
-            nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
+            nsd_subj_subset = f"subj_{nsd_subj_subset:02d}"
 
         logging.info(f"Distribution for {nsd_subj_subset}...")
 

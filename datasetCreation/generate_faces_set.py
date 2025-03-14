@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from utils.config import load_config, Configuration
+from utils.utils import logging_message, subjects_list_unifier
 
 import logging
 
@@ -16,10 +17,30 @@ logging.basicConfig(
 
 
 def generate_positive_set(config: Configuration):
-    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
+    if config.pipeline.step_2_dataset_creation.generate_positive_set:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Starting face set generation",
+            )
+        )
+    else:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Skipping face set generation",
+            )
+        )
+        return
+
+    subjects = subjects_list_unifier(
+        config.pipeline.step_2_dataset_creation.subjects, False
+    )
+
+    for nsd_subj_subset in subjects:
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
-            nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
+            nsd_subj_subset = f"subj_{nsd_subj_subset:02d}"
         logging.info(f"Generating face set for {nsd_subj_subset=}")
 
         # Create the subdirectory path and make sure it exists
@@ -110,7 +131,27 @@ def generate_positive_set(config: Configuration):
 
 
 def generate_animate_non_face(config: Configuration):
-    for nsd_subj_subset in config.dataset_validation.nsd_samples_subjects_to_check:
+    if config.pipeline.step_2_dataset_creation.generate_non_face_set:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Starting non-face set generation",
+            )
+        )
+    else:
+        logging.info(
+            logging_message(
+                config.pipeline.step_2_dataset_creation.step,
+                "Skipping non-face set generation",
+            )
+        )
+        return
+
+    subjects = subjects_list_unifier(
+        config.pipeline.step_2_dataset_creation.subjects, False
+    )
+
+    for nsd_subj_subset in subjects:
         # Create subject folder name if necessary
         if nsd_subj_subset != "shared":
             nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"

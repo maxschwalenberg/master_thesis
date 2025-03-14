@@ -58,7 +58,7 @@ def mutually_exclusive_t_test_export(
 
     np.save(
         os.path.join(
-            config.directories.t_test_results_dir,
+            config.t_test_results_dir,
             "mutually_exclusive",
             f"result_subj_{subj:02d}.npy",
         ),
@@ -203,10 +203,10 @@ if __name__ == "__main__":
 
     # quit()
 
-    t_test_subdir = "subj_02"
+    t_test_subdir = "subj_01"
     subj_to_pick_shared = False
 
-    for labels_subdir in ["face_animate"]:
+    for labels_subdir in ["face_animate_new"]:
         for mode in ["absolute", "signed"]:
             t_test_results_to_mgz(
                 config,

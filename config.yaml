@@ -64,10 +64,48 @@ nsd_project:
 
 # Subjects and ROIs to analyze
 analysis:
-  subjects_to_analyze: [2] # [1, 2, 3, 7]
+  subjects_to_analyze: [1] # [1, 2, 3, 7]
   rois_to_analyze:
     { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8 }
 
 # Dataset validation parameters
 dataset_validation:
   nsd_samples_subjects_to_check: ["1"] # ['shared', '1', ..., '8']
+
+pipeline:
+  step_1_preprocessing:
+    step: 1
+    extract_nsd_data: true
+    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Define subjects for extraction
+
+  step_2_dataset_creation:
+    download_data: true
+    create_data_split: true
+    face_detection: true
+    generate_non_face_set: true
+    generate_positive_set: true
+    remove_nans: true
+    label_data: true
+    load_betas: true
+    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for dataset creation
+    step: 2
+
+  step_3_t_testing:
+    t_testing: true
+    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for t-testing
+    step: 3
+
+    thresholds_map: [0.0, 2.0, 3.0, 4.0, 5.0]
+    clipping_value: 7
+
+  step_4_rsa_analysis:
+    rsa_analysis: true
+    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for RSA
+    step: 4
+
+  step_5_gaussian_fitting:
+    fit_gaussian: true
+    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for Gaussian fitting
+    step: 5
+
+  overwrite_existing: false # Global overwrite flag
