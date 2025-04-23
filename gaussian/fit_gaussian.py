@@ -392,8 +392,14 @@ class Gaussian2DFitter:
         new_train = train_ones @ scale  # make
         return new_train.T.squeeze(), scale
 
-    def compute_noise_ceiling(self, betas_train_voxel, betas_test_voxel):
-        rescaled_train_betas, _ = self.rescale(betas_train_voxel, betas_test_voxel)
+    def compute_noise_ceiling(
+        self, betas_train_voxel, betas_test_voxel, rescaled: bool = True
+    ):
+
+        if rescaled:
+            rescaled_train_betas, _ = self.rescale(betas_train_voxel, betas_test_voxel)
+        else:
+            rescaled_train_betas = betas_train_voxel
         # rescaled_train_betas = betas_train_voxel
 
         noise_ceiling = self.compute_variance(rescaled_train_betas, betas_test_voxel)
@@ -675,6 +681,8 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         "var_test_rescaled",
         "noise_ceiling",
         "model_performance",
+        "noise_ceiling_non_rescaled",
+        "model_performance_non_rescaled",
         "rescaled_slope",
         "rescaled_intercept",
     ]
@@ -685,8 +693,8 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         )
         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
 
-        mask = retrieve_roi_mask(config, subj, set_to_take)
-        betas, _ = retrieve_stacked_betas(
+        mask = retrieve_roi_mask(config, subj, set_to_take, False)
+        betas, _, mds_mapping = retrieve_stacked_betas(
             config, subj, "averaged", 0, subj_to_check=set_to_take
         )
         betas_test = retrieve_stacked_betas_test(
@@ -736,6 +744,7 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
 
                     A, x0, y0, sigma, intercept = popt
                     slope = A
+
                     voxel_fit = [
                         x0,
                         y0,
@@ -743,13 +752,15 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                         slope,
                         intercept,
                         solved,
-                        np.nan,
-                        np.nan,
-                        np.nan,
-                        np.nan,
-                        np.nan,  # Placeholders for metrics
-                        np.nan,
-                        np.nan,
+                        np.nan,  # var_train
+                        np.nan,  # var_test
+                        np.nan,  # var_test_rescaled
+                        np.nan,  # noise_ceiling
+                        np.nan,  # model_performance
+                        np.nan,  # noise_ceiling_non_rescaled
+                        np.nan,  # model_performance_non_rescaled
+                        np.nan,  # rescaled_slope
+                        np.nan,  # rescaled_intercept
                     ]
                     fits_roi.loc[voxel_i] = voxel_fit
 
@@ -787,7 +798,12 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 # rescaled_predictions, _ = fitter.rescale(predictions, voxel_test)
                 # var_test = fitter.compute_variance(rescaled_predictions, voxel_test)
 
-                noise_ceiling = fitter.compute_noise_ceiling(voxel_train, voxel_test)
+                noise_ceiling = fitter.compute_noise_ceiling(
+                    voxel_train, voxel_test, rescaled=True
+                )
+                noise_ceiling_unscaled = fitter.compute_noise_ceiling(
+                    voxel_train, voxel_test, rescaled=False
+                )
 
                 var_test = fitter.variance_explained((x_samples, y_samples), voxel_test)
 
@@ -809,12 +825,21 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                     var_test_rescaled / noise_ceiling if noise_ceiling != 0 else 0.0
                 )
 
+                model_performance_non_rescaled = var_test / noise_ceiling_unscaled
+
                 fits_roi.at[index, "var_train"] = var_train
                 fits_roi.at[index, "var_test"] = var_test
                 fits_roi.at[index, "var_test_rescaled"] = var_test_rescaled
 
                 fits_roi.at[index, "noise_ceiling"] = noise_ceiling
                 fits_roi.at[index, "model_performance"] = model_perf
+
+                fits_roi.at[index, "noise_ceiling_non_rescaled"] = (
+                    noise_ceiling_unscaled
+                )
+                fits_roi.at[index, "model_performance_non_rescaled"] = (
+                    model_performance_non_rescaled
+                )
 
                 fits_roi.at[index, "rescaled_slope"] = rescaled_slope
                 fits_roi.at[index, "rescaled_intercept"] = rescaled_intercept

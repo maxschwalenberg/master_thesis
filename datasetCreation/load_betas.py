@@ -142,13 +142,16 @@ def save_betas_single_image_improved(
         f"full_betas_subj{subject_id:02d}.npy",
     )
 
-    logging.info(f"Load full brain data for subject {subject_id} - {full_brain_data_path}")
+    logging.info(
+        f"Load full brain data for subject {subject_id} - {full_brain_data_path}"
+    )
 
     full_brain_data = np.load(full_brain_data_path, allow_pickle=False)
 
-
     logging.info("Loading finished")
-    #full_brain_data = full_brain_data.T
+    if full_brain_data.shape[0] > full_brain_data.shape[1]:
+        full_brain_data = full_brain_data.T
+
     logging.info("Transposing finished")
 
     # testing
@@ -225,56 +228,63 @@ def save_betas_single_image_improved(
     del full_brain_data
 
 
-def load_betas_subset(
-    config: Configuration, overwrite: bool = False, subj_to_pick="shared"
-):
+def load_betas_subset(config: Configuration, overwrite: bool = False):
     target_image_betas_dir_positive = os.path.join(config.directories.image_betas_dir)
     target_image_betas_dir_negative = os.path.join(config.directories.image_betas_dir)
+    for subj in config.pipeline.step_2_dataset_creation.subjects:
+        if subj == "shared":
+            subj_to_pick = "shared"
+        else:
+            subj_to_pick = f"subj_{subj:02d}"
 
-    positive_subset_excel_path = os.path.join(
-        config.directories.excel_files_target_dir,
-        subj_to_pick,
-        config.dataset_creation.subset_animate_face_unchecked,
-    )
-    negative_subset_excel_path = os.path.join(
-        config.directories.excel_files_target_dir,
-        subj_to_pick,
-        config.dataset_creation.subset_animate_non_face_unchecked,
-    )
-
-    # positive_subset = pd.read_excel(positive_subset_excel_path)
-    negative_subset = pd.read_excel(negative_subset_excel_path)
-    positive_subset = pd.read_excel(positive_subset_excel_path)
-
-    logging.info(f"Positive Set: {len(positive_subset)}")
-    logging.info(f"Negative Set: {len(negative_subset)}")
-
-    os.makedirs(target_image_betas_dir_negative, exist_ok=True)
-    os.makedirs(target_image_betas_dir_positive, exist_ok=True)
-
-    logging.info(f"Extract betas for positive&negative subset")
-    subjects = list(range(1, 8 + 1))
-    for subject in subjects:
-        save_betas_single_image_improved(
-            positive_subset,
-            negative_subset,
-            subject,
-            config,
-            target_image_betas_dir_positive,
-            target_image_betas_dir_negative,
-            overwrite=overwrite,
+        positive_subset_excel_path = os.path.join(
+            config.directories.excel_files_target_dir,
+            subj_to_pick,
+            config.dataset_creation.subset_animate_face_unchecked,
         )
+        negative_subset_excel_path = os.path.join(
+            config.directories.excel_files_target_dir,
+            subj_to_pick,
+            config.dataset_creation.subset_animate_non_face_unchecked,
+        )
+
+        # positive_subset = pd.read_excel(positive_subset_excel_path)
+        negative_subset = pd.read_excel(negative_subset_excel_path)
+        positive_subset = pd.read_excel(positive_subset_excel_path)
+
+        logging.info(f"Positive Set: {len(positive_subset)}")
+        logging.info(f"Negative Set: {len(negative_subset)}")
+
+        os.makedirs(target_image_betas_dir_negative, exist_ok=True)
+        os.makedirs(target_image_betas_dir_positive, exist_ok=True)
+
+        logging.info(f"Extract betas for positive&negative subset")
+
+        if subj == "shared":
+            subjects = list(range(1, 8 + 1))
+            for subject in subjects:
+                save_betas_single_image_improved(
+                    positive_subset,
+                    negative_subset,
+                    subject,
+                    config,
+                    target_image_betas_dir_positive,
+                    target_image_betas_dir_negative,
+                    overwrite=overwrite,
+                )
+        else:
+            save_betas_single_image_improved(
+                positive_subset,
+                negative_subset,
+                subj,
+                config,
+                target_image_betas_dir_positive,
+                target_image_betas_dir_negative,
+                overwrite=overwrite,
+            )
 
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
 
-    assert len(config.dataset_validation.nsd_samples_subjects_to_check) == 1
-
-    subj_to_pick = (
-        "shared"
-        if config.dataset_validation.nsd_samples_subjects_to_check[0] == "shared"
-        else f"subj_{int(config.dataset_validation.nsd_samples_subjects_to_check[0]):02d}"
-    )
-
-    load_betas_subset(config, overwrite=False, subj_to_pick=subj_to_pick)
+    load_betas_subset(config, overwrite=False)

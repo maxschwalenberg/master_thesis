@@ -4,12 +4,15 @@ import time
 import numpy as np
 from scipy.spatial.distance import pdist
 from previousCode.nsddatapaper_rsa.utils.utils import mds
+from t_testing.clean_roi_mask import modify_mask_with_ttest
 import nibabel as nib
 import pandas as pd
 import logging
 
 from utils.config import Configuration, load_config
 from utils.utils import retrieve_stacked_betas
+from scipy.stats import wasserstein_distance
+
 
 """
 This file takes the betas, the mask and computes
@@ -30,17 +33,27 @@ logging.basicConfig(
 )
 
 
+# Define custom metric wrapper
+def emd(u, v):
+    return wasserstein_distance(u, v)
+
+
 def create_rdm(
     config: Configuration,
     list_subj,
     mask_value: int,
     set_to_take: str,
+    t_test_threshold: float,
     mode="averaged",
     sample_to_pick: int = 0,
+    randomization: bool = False,
 ):
     assert mode in ["averaged", "single"]
-
-    logging.info(f"Creating RDM for mode {mode}")
+    logging.info(f"Creating RDM for mode {mode} - T-Test THRESHOLD: {t_test_threshold}")
+    logging.info(
+        f"Using distance-metric={config.pipeline.step_4_rsa_analysis.distance_metric}"
+    )
+    time.sleep(0.25)
     logging.info(
         f"Using positive set: {os.path.join(set_to_take, config.dataset_creation.subset_animate_face_final)}"
     )
@@ -49,122 +62,164 @@ def create_rdm(
         logging.info(f"Picking sample {sample_to_pick}")
 
     for i, sub in enumerate(list_subj):
+        # Determine if using shared set or not
+        pick_shared = set_to_take == "shared"
 
+        # Modify and generate temporary t-test mask files
+        modify_mask_with_ttest(
+            config, t_test_threshold, pick_shared, sub, sub_filename="temporary_mask"
+        )
+
+        # Load left and right hemisphere masks
         mask_path_lh = os.path.join(
             config.directories.t_test_roi_dir,
             set_to_take,
-            f"lh.subj{sub:02d}.cleanedrois.mgz",
+            f"lh.subj{sub:02d}.temporary_mask.mgz",
         )
         mask_path_rh = os.path.join(
             config.directories.t_test_roi_dir,
             set_to_take,
-            f"rh.subj{sub:02d}.cleanedrois.mgz",
+            f"rh.subj{sub:02d}.temporary_mask.mgz",
         )
-
         logging.info(f"Loading mask from\n{mask_path_rh=}\n{mask_path_lh=}")
 
         mask_lh = nib.load(mask_path_lh).get_fdata().squeeze()
         mask_rh = nib.load(mask_path_rh).get_fdata().squeeze()
 
-        mask = np.concatenate((mask_lh, mask_rh)).astype(int)
-        betas, image_ids = retrieve_stacked_betas(
-            config, sub, mode, sample_to_pick, subj_to_check=set_to_take
+        # Load beta values and transpose for further analysis
+        betas, image_ids, mds_mapping = retrieve_stacked_betas(
+            config,
+            sub,
+            mode,
+            sample_to_pick,
+            subj_to_check=set_to_take,
+            only_face_set=config.pipeline.step_4_rsa_analysis.only_face_set,
+            randomization=randomization,
         )
-
         assert not np.isnan(betas).any()
-
         betas = np.transpose(betas)
 
-        logging.info(f"{betas.shape=}")
+        # For the combined (both) analysis, check that the beta dimensions match the concatenated mask
+        combined_mask = np.concatenate((mask_lh, mask_rh)).astype(int)
+        assert betas.shape[0] == combined_mask.shape[0], (
+            f"Beta shape {betas.shape[0]} does not match combined mask shape "
+            f"{combined_mask.shape[0]} for subject {sub}"
+        )
 
-        # Create mask for value maskvalue
-        if isinstance(mask_value, int):
-            masked_voxels = mask == mask_value
+        # Split beta values according to hemisphere (assuming left mask first, then right)
+        n_lh = mask_lh.shape[0]
+        betas_both = betas  # full concatenated beta matrix
+        betas_lh = betas[:n_lh, :]
+        betas_rh = betas[n_lh:, :]
 
-        elif isinstance(mask_value, list):
-            masked_voxels = np.isin(mask, mask_value)
-
-        else:
-            raise ValueError()
-
-        rdm_dir = os.path.join(
+        # Save metadata (e.g., image_ids) once per subject.
+        rdm_dir_subject = os.path.join(
             config.directories.rdm_dir, set_to_take, f"subj_{sub:02d}"
         )
-        os.makedirs(rdm_dir, exist_ok=True)
-
-        if mode == "averaged":
-            rdm_file = os.path.join(rdm_dir, f"mask_{mask_value}_{mode}_rdm.npy")
-        elif mode == "single":
-            rdm_file = os.path.join(
-                rdm_dir,
-                f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_rdm.npy",
-            )
-
-        mds_dir = os.path.join(
-            config.directories.mds_dir, set_to_take, f"subj_{sub:02d}"
-        )
-        metadata_file = os.path.join(
-            config.directories.rdm_dir, set_to_take, f"subj_{sub:02d}", "metadata.npy"
-        )
+        os.makedirs(rdm_dir_subject, exist_ok=True)
+        metadata_file = os.path.join(rdm_dir_subject, "metadata.npy")
         logging.info(f"{len(image_ids)=}")
         np.save(metadata_file, image_ids)
 
-        os.makedirs(mds_dir, exist_ok=True)
+        # For MDS outputs, make sure the target directory exists.
+        mds_dir_subject = os.path.join(
+            config.directories.mds_dir, set_to_take, f"subj_{sub:02d}"
+        )
+        os.makedirs(mds_dir_subject, exist_ok=True)
 
-        if mode == "averaged":
-            mds_file = os.path.join(mds_dir, f"mask_{mask_value}_{mode}_mds.npy")
-        elif mode == "single":
-            mds_file = os.path.join(
-                mds_dir,
-                f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_mds.npy",
-            )
+        # Define the three hemispheric analyses.
+        for hemisphere in ["both", "lh", "rh"]:
+            if hemisphere == "both":
+                current_mask = combined_mask
+                current_betas = betas_both
+            elif hemisphere == "lh":
+                current_mask = mask_lh.astype(int)
+                current_betas = betas_lh
+            elif hemisphere == "rh":
+                current_mask = mask_rh.astype(int)
+                current_betas = betas_rh
 
-        logging.info(f"Saving to ...\nRDM ----> {rdm_file}\nMDS ----> {mds_file}")
+            logging.info(f"Processing hemisphere '{hemisphere}' for subject {sub:02d}")
 
-        if True:
-            # Apply mask20 to betas
-            masked_betas = betas[masked_voxels, :]
+            # Create the voxel mask based on mask_value
+            if isinstance(mask_value, int):
+                masked_voxels = current_mask == mask_value
+            elif isinstance(mask_value, list):
+                masked_voxels = np.isin(current_mask, mask_value)
+            else:
+                raise ValueError("mask_value must be either an int or a list of ints")
+
+            # Define output file paths
+            if mode == "averaged":
+                rdm_file = os.path.join(
+                    rdm_dir_subject, f"mask_{mask_value}_{mode}_{hemisphere}_rdm.npy"
+                )
+                mds_file = os.path.join(
+                    mds_dir_subject, f"mask_{mask_value}_{mode}_{hemisphere}_mds.npy"
+                )
+            elif mode == "single":
+                rdm_file = os.path.join(
+                    rdm_dir_subject,
+                    f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_{hemisphere}_rdm.npy",
+                )
+                mds_file = os.path.join(
+                    mds_dir_subject,
+                    f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_{hemisphere}_mds.npy",
+                )
+
+            # Apply the mask to the beta values for this hemisphere
+            masked_betas = current_betas[masked_voxels, :]
 
             if np.isnan(masked_betas).any():
-                raise ValueError("Found NaNs!!")
+                raise ValueError("Found NaNs in masked betas!")
 
-            # Remove any voxels with NaN values
+            # Remove any voxels which contain any NaN values along the feature axis.
             good_vox = [np.sum(np.isnan(x)) == 0 for x in masked_betas]
             masked_betas = masked_betas[good_vox, :]
 
             if masked_betas.shape[0] == 0:
-                logging.info(f"All voxels have NaN values ... {mask_value=}")
-                return
-                raise ValueError(f"All voxels have NaN values ... {mask_value=}")
+                logging.info(
+                    f"All voxels have NaN values ... {mask_value=} for hemisphere '{hemisphere}'"
+                )
+                continue  # Skip to the next hemisphere analysis
 
             logging.info(
-                f"Shape of masked betas for value {mask_value}: {masked_betas.shape}"
+                f"Shape of masked betas for mask value {mask_value}, hemisphere '{hemisphere}': {masked_betas.shape}"
             )
 
             if np.isnan(masked_betas).any():
                 masked_betas = masked_betas[~np.isnan(masked_betas).any(axis=1), :]
 
-            # Transpose for correlation distance computation
+            # Transpose for distance computation (features as rows)
             X = masked_betas.T
+            logging.info(f"Masked betas shape for distance computation: {X.shape}")
 
-            logging.info(f"Masked betas shape: {X.shape}")
+            # Determine which distance metric to use
+            if config.pipeline.step_4_rsa_analysis.distance_metric != "wasserstein":
+                metric_to_use = config.pipeline.step_4_rsa_analysis.distance_metric
+            else:
+                metric_to_use = emd  # assuming emd is defined/imported
 
-            rdm = pdist(X, metric="correlation")
-            logging.info(f"RDM: {rdm.shape}")
+            # Compute the RDM using pdist (e.g. from scipy.spatial.distance)
+            rdm = pdist(X, metric=metric_to_use)
+            logging.info(
+                f"Computed RDM shape for hemisphere '{hemisphere}': {rdm.shape}"
+            )
 
             if np.any(np.isnan(rdm)):
                 raise ValueError("NaN values found in RDM")
 
             np.save(rdm_file, rdm)
+            logging.info(f"Saved RDM to {rdm_file}")
 
-        if True:
-
-            rdm = np.load(rdm_file, allow_pickle=True).astype(np.float32)
-
-            mds_out = mds(rdm).astype(np.float32)
-            logging.info(f"MDS: {mds_out.shape}")
-
+            # Load the RDM back and run MDS (assuming mds() is defined/imported)
+            rdm_loaded = np.load(rdm_file, allow_pickle=True).astype(np.float32)
+            mds_out = mds(rdm_loaded).astype(np.float32)
+            logging.info(
+                f"MDS output shape for hemisphere '{hemisphere}': {mds_out.shape}"
+            )
             np.save(mds_file, mds_out)
+            logging.info(f"Saved MDS output to {mds_file}")
 
         # if np.isnan(betas).any():
         #       # SUBJ06 AND SUBJ08 Have NaNs for some  reason: need to remove and replace. Can't do before because of the masking
@@ -312,9 +367,36 @@ def create_rdm(
 
 
 if __name__ == "__main__":
-    set_to_take = "subj_01"
+    for subj_id in range(1, 9):
+        set_to_take = f"subj_{subj_id:02d}"
 
-    config = load_config("config.yaml")
-    mask_values = list(config.analysis.rois_to_analyze.values())
-    for mask_value in mask_values:
-        create_rdm(config, [1], mask_value, set_to_take, mode="averaged")
+        config = load_config("config.yaml")
+        mask_values = list(config.analysis.rois_to_analyze.values())
+        for mask_value in mask_values:
+            try:
+                n_samples = 3
+                for sample_v in range(0, n_samples):
+                    create_rdm(
+                        config,
+                        [subj_id],
+                        mask_value,
+                        set_to_take,
+                        2.0,
+                        mode="single",
+                        sample_to_pick=sample_v,
+                        randomization=True,
+                    )
+
+            except:
+                n_samples = 2
+                for sample_v in range(0, n_samples):
+                    create_rdm(
+                        config,
+                        [subj_id],
+                        mask_value,
+                        set_to_take,
+                        2.0,
+                        mode="single",
+                        sample_to_pick=sample_v,
+                        randomization=True,
+                    )

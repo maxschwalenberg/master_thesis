@@ -17,12 +17,17 @@ logging.basicConfig(
 )
 
 
-def retrieve_roi_mask(config: Configuration, subject: int, subj_to_check: str):
+def retrieve_roi_mask(
+    config: Configuration,
+    subject: int,
+    subj_to_check: str,
+    sub_filename: str = "cleanedrois",
+):
     mask_path_lh = os.path.join(
-        config.t_test_roi_dir, subj_to_check, f"lh.subj{subject:02d}.cleanedrois.mgz"
+        config.t_test_roi_dir, subj_to_check, f"lh.subj{subject:02d}.{sub_filename}.mgz"
     )
     mask_path_rh = os.path.join(
-        config.t_test_roi_dir, subj_to_check, f"rh.subj{subject:02d}.cleanedrois.mgz"
+        config.t_test_roi_dir, subj_to_check, f"rh.subj{subject:02d}.{sub_filename}.mgz"
     )
     logging.info(f"Loading mask from\n{mask_path_lh}\n{mask_path_rh}")
 

@@ -67,11 +67,18 @@ improved and more conclusive statistical testing: https://www.sciencedirect.com/
 
 rescaling on V1
 
-I am working with the Natural Scenes Dataset of fmri data. I am performing various experiments. It is important that I am able to have nice preprocessed data. However, I have some problems - participants having seen an image leads to a neural response which is captured using fmri (bold). Wouldnt it be expected that the same image results in a similar stimulus?
+- retrieve_roi_mask .... add parametrization to t_test_value
 
-My analysis so far is not really complying with this. How can I align responses to the same stimuli to one another?
+- compare metrics (test variance, unscaled noise ceiling) to no rescaled data (stans)
+- compare metrics for scaling based on significant voxels as opposed to V1
 
-so in essence I need insights into the following:
+- model performance non rescaled include in script
 
-- how well does fmri reflect the neural responses? what are the disadvantages and what noisiness/false responses is there to be excpeted
-- how can neural responses (fmri) be aligned to each other? what is the state of the art or how are people doing it generally?
+labeled data:
+1, 2, 3, 4, 5
+
+labeled ROIs:
+1, 4
+
+- violin plot
+- permutation analysis of pairwise MDS distance and bounding box distances

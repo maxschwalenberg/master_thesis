@@ -90,8 +90,11 @@ def normalize_betas(betas, betas_v1, percentile):
     means, stds = np.mean(betas, axis=1, keepdims=True), np.std(
         betas, axis=1, keepdims=True
     )
-    normalized_samples = (betas - means) / stds
+    # normalized_samples = (betas - means) / stds
+    normalized_samples = (betas) / stds
+
     global_amplitudes = np.percentile(np.abs(betas_v1), percentile, axis=1)
+
     scaling_factors = global_amplitudes / np.mean(global_amplitudes)
     return normalized_samples * scaling_factors[:, np.newaxis]
 

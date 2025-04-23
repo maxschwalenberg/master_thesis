@@ -19,7 +19,7 @@ def compute_noise_ceilling(config: Configuration, shared_set: bool, subject: int
     subject_to_pick = "shared" if shared_set else f"subj_{subject:02d}"
 
     # shape --> (n_images, n_voxels)
-    betas_train, _ = retrieve_stacked_betas(
+    betas_train, _, _ = retrieve_stacked_betas(
         config, subject, "averaged", 0, subj_to_check=subject_to_pick
     )
     betas_test = retrieve_stacked_betas_test(

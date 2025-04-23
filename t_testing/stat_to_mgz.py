@@ -78,7 +78,7 @@ def t_test_results_to_mgz(
 ):
     hemis = ["lh", "rh"]
 
-    subs = [f"subj{i:02d}" for i in config.analysis.subjects_to_analyze]
+    subs = [f"subj{i:02d}" for i in config.pipeline.step_3_t_testing.subjects]
     print(subs)
     mask_dir = os.path.join(
         config.nsd_data.stans_thesis_repo_data, config.nsd_data.mask_data_dir
@@ -113,9 +113,15 @@ def t_test_results_to_mgz(
             t_data = np.clip(t_data, -clipping_value, clipping_value)
             max_value = clipping_value
             min_value = -clipping_value
+
         else:
+            raise NotImplementedError(
+                "Removed functionality ... only works for predefined clipping range right now."
+            )
             max_value = np.nanmax(t_data[:, 0]).item()
             min_value = np.nanmin(t_data[:, 0]).item()
+
+        scale = ((2 * clipping_value - 0.1) - 0.1) / (2 * clipping_value - 0)
 
         hemisphere_shapes = []
 
@@ -174,6 +180,26 @@ def t_test_results_to_mgz(
                     data_out[i] = np.abs(t_data[index][0])
                 else:
                     data_out[i] = t_data[index][0] + np.abs(min_value)
+
+            # Linear transformieren in [0.1, 3.9]
+            arr_scaled = 0.1 + scale * (data_out - 0)
+
+            # Mittelwert korrigieren (falls nötig)
+            mean_before = np.mean(data_out)
+            mean_after = np.mean(arr_scaled)
+            shift = mean_before - mean_after
+
+            # Werte gleichmäßig verschieben, um Mittelwert wieder auf 2 zu bringen
+            data_out = arr_scaled + shift
+            for i in range(maskdata_long.shape[0]):
+                if hemi_i == 0:
+                    index = i
+                else:
+                    index = i + hemisphere_shapes[0]
+
+                if thresholding:
+                    if np.abs(t_data[index][0]) < threshold:
+                        data_out[i] = 0
 
             logging.info(f"{data_out_file}")
             img = nib.Nifti1Image(np.expand_dims(data_out, axis=(1, 2)), np.eye(4))

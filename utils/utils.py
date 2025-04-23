@@ -36,17 +36,37 @@ def subjects_list_unifier(subjects_list: list, reduce_shared: bool):
         return subjects_list
 
 
-def retrieve_roi_mask(config: Configuration, subject: int, subj_to_check: str):
-    mask_path_lh = os.path.join(
-        config.directories.t_test_roi_dir,
-        subj_to_check,
-        f"lh.subj{subject:02d}.cleanedrois.mgz",
-    )
-    mask_path_rh = os.path.join(
-        config.directories.t_test_roi_dir,
-        subj_to_check,
-        f"rh.subj{subject:02d}.cleanedrois.mgz",
-    )
+def retrieve_roi_mask(
+    config: Configuration,
+    subject: int,
+    subj_to_check: str,
+    take_cleaned_roi: bool,
+    sub_filename: str = "cleanedrois",
+):
+    logging.info(f"Loading ROI mask {take_cleaned_roi=}")
+    if take_cleaned_roi:
+        mask_path_lh = os.path.join(
+            config.directories.t_test_roi_dir,
+            subj_to_check,
+            f"lh.subj{subject:02d}.{sub_filename}.mgz",
+        )
+        mask_path_rh = os.path.join(
+            config.directories.t_test_roi_dir,
+            subj_to_check,
+            f"rh.subj{subject:02d}.{sub_filename}.mgz",
+        )
+    else:
+        mask_path_lh = os.path.join(
+            config.directories.t_test_roi_dir,
+            subj_to_check,
+            f"lh.subj{subject:02d}.testrois.mgz",
+        )
+        mask_path_rh = os.path.join(
+            config.directories.t_test_roi_dir,
+            subj_to_check,
+            f"rh.subj{subject:02d}.testrois.mgz",
+        )
+
     logging.info(f"Loading mask from\n{mask_path_lh}\n{mask_path_rh}")
 
     mask_lh = nib.load(mask_path_lh).get_fdata().squeeze()
@@ -70,8 +90,27 @@ def retrieve_stacked_betas(
     sample: int,
     label_subset_name: str = None,
     subj_to_check="shared",
+    only_face_set=True,
+    randomization: bool = False,
 ):
-    assert mode in ["averaged", "single"]
+    assert mode in ["averaged", "single", "multiple"]
+
+    nsd_dir = os.path.join(
+        config.nsd_project.nsd_data_dir, config.nsd_project.nsd_subdir
+    )
+    tsv_path = os.path.join(
+        nsd_dir,
+        config.nsd_project.label_subdir,
+        "ppdata",
+        f"subj{subj:02d}",
+        "behav",
+        "responses.tsv",
+    )
+
+    # having all of the array loaded at once results in memory pressure
+    # reduce to needed subset!
+
+    tsv_data = pd.read_csv(tsv_path, sep="\t")
 
     if label_subset_name is None:
         label_subset_name = config.dataset_creation.subset_animate_face_final
@@ -88,17 +127,56 @@ def retrieve_stacked_betas(
     )
 
     subset = pd.read_excel(set_excel_path)
-    filenames = subset["cocoId"].to_list()
-    filenames = [f"{e:012d}" for e in filenames]
 
-    for entry in filenames:
+    if only_face_set:
+        pass
+    else:
+        subset = pd.concat(
+            [
+                subset,
+                pd.read_excel(
+                    os.path.join(
+                        config.directories.excel_files_target_dir,
+                        subj_to_check,
+                        config.dataset_creation.subset_animate_non_face_final,
+                    )
+                ),
+            ]
+        )
+
+    filenames_coco_number = subset["cocoId"].to_list()
+    filenames_nsd_number = subset["nsdId"].to_list()
+    filenames = [f"{e:012d}" for e in filenames_coco_number]
+
+    mds_mapping = []
+
+    for mds_index, entry in enumerate(filenames):
         image_ids.append(entry)
+
+        tsv_matches = tsv_data.loc[
+            tsv_data["73KID"] == filenames_nsd_number[mds_index] + 1
+        ].index.tolist()
 
         npy_files = sorted(
             glob.glob(
                 os.path.join(betas_dir, entry, f"subj_{subj:02d}", "full.betas_*.npy")
             )
         )
+
+        if randomization:
+            seed = subj * 10000 + int(entry)
+            rng = np.random.RandomState(seed)
+            perm = rng.permutation(len(npy_files))
+            npy_files = [npy_files[i] for i in perm]
+
+        for npy_file in npy_files:
+
+            base_name = os.path.basename(npy_file)
+            # full.betas_*.npy
+            extracted_trial_id = int(base_name[11:-4])
+            assert (
+                extracted_trial_id in tsv_matches
+            ), "Something is wrong... the indices are not matching!"
 
         if len(npy_files) == 0:
             raise ValueError(f"No data found for {entry}!")
@@ -107,15 +185,28 @@ def retrieve_stacked_betas(
             npy_file = npy_files[sample]
             extracted_sample = np.load(npy_file)
 
+            mds_mapping.append(mds_index)
+
+        elif mode == "multiple":
+            npy_files = npy_files[:-1]
+
+            samples = []
+            for i in range(len(npy_files)):
+                sample = np.load(npy_files[i])
+                data.append(sample)
+                mds_mapping.append(mds_index)
+
         elif mode == "averaged":
             # leave one out for test set
             samples = [np.load(npy_file) for npy_file in npy_files[:-1]]
             samples = np.stack(samples)
             extracted_sample = np.mean(samples, axis=0)
 
+            mds_mapping.append(mds_index)
+
         data.append(extracted_sample)
 
-    return np.stack(data), image_ids
+    return np.stack(data), image_ids, mds_mapping
 
 
 def retrieve_stacked_betas_test(
@@ -137,9 +228,46 @@ def retrieve_stacked_betas_test(
 
     positive_subset = pd.read_excel(positive_set_excel_path)
     positive_filenames = positive_subset["cocoId"].to_list()
+    filenames_nsd_number = positive_subset["nsdId"].to_list()
+
     positive_filenames = [f"{e:012d}" for e in positive_filenames]
 
-    for entry in positive_filenames:
+    nsd_dir = os.path.join(
+        config.nsd_project.nsd_data_dir, config.nsd_project.nsd_subdir
+    )
+    tsv_path = os.path.join(
+        nsd_dir,
+        config.nsd_project.label_subdir,
+        "ppdata",
+        f"subj{subj:02d}",
+        "behav",
+        "responses.tsv",
+    )
+
+    # having all of the array loaded at once results in memory pressure
+    # reduce to needed subset!
+
+    tsv_data = pd.read_csv(tsv_path, sep="\t")
+
+    for entry_index, entry in enumerate(positive_filenames):
+        tsv_matches = tsv_data.loc[
+            tsv_data["73KID"] == filenames_nsd_number[entry_index] + 1
+        ].index.tolist()
+
+        npy_files = sorted(
+            glob.glob(
+                os.path.join(betas_dir, entry, f"subj_{subj:02d}", "full.betas_*.npy")
+            )
+        )
+
+        for npy_file in npy_files:
+
+            base_name = os.path.basename(npy_file)
+            # full.betas_*.npy
+            extracted_trial_id = int(base_name[11:-4])
+            assert (
+                extracted_trial_id in tsv_matches
+            ), "Something is wrong... the indices are not matching!"
 
         npy_files = sorted(
             glob.glob(os.path.join(betas_dir, entry, f"subj_{subj:02d}", "*.npy"))

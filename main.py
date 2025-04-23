@@ -13,6 +13,10 @@ from datasetCreation.generate_faces_set import (
     generate_animate_non_face,
     generate_positive_set,
 )
+from datasetCreation.check_labelling import (
+    adjust_labelled_data,
+    correct_sets_for_nans_and_missing_samples,
+)
 
 from t_testing.t_testing import set_t_testing
 from t_testing.stat_to_mgz import t_test_results_to_mgz
@@ -32,41 +36,53 @@ logging.basicConfig(
 
 def pipeline_labelling(config: Configuration):
     # 2.
-    download_data(config)
-    create_data_split(config)
+    if config.pipeline.step_2_dataset_creation.download_data:
+        download_data(config)
+
+    if config.pipeline.step_2_dataset_creation.create_data_split:
+        create_data_split(config)
 
     # 3.
-    generate_face_detection_results(config)
+    if config.pipeline.step_2_dataset_creation.face_detection:
+        generate_face_detection_results(config)
 
     # 4.
-    generate_animate_non_face(config)  # Generates non-face animate set
-    generate_positive_set(config)  # Generates positive face set
+    if config.pipeline.step_2_dataset_creation.generate_non_face_set:
+        generate_animate_non_face(config)  # Generates non-face animate set
 
-    # 5. remove NaNs
-    raise NotImplementedError(f"Needs improvement in the NaN script")
+    if config.pipeline.step_2_dataset_creation.generate_positive_set:
+        generate_positive_set(config)  # Generates positive face set
+
+    load_betas_subset(config, overwrite=False)
+
+    if config.pipeline.step_2_dataset_creation.remove_nans:
+        # 5. remove NaNs
+        subjects = subjects_list_unifier(
+            config.pipeline.step_2_dataset_creation.subjects, False
+        )
+        for subj in subjects:
+            if subj == "shared":
+                fullset = True
+
+                adjust_labelled_data(config, subj, fullset=fullset)
+                correct_sets_for_nans_and_missing_samples(config, subj)
+            else:
+                fullset = False
+
+                adjust_labelled_data(config, f"subj_{subj:02d}", fullset=fullset)
+                correct_sets_for_nans_and_missing_samples(config, f"subj_{subj:02d}")
 
     # 6. label!
+    if config.pipeline.step_2_dataset_creation.label_data:
+        pass
     raise NotImplementedError("Need to label")
-
-    # x. Load single betas
-    assert len(config.dataset_validation.nsd_samples_subjects_to_check) == 1
-
-    subj_to_pick = (
-        "shared"
-        if config.dataset_validation.nsd_samples_subjects_to_check[0] == "shared"
-        else f"subj_{int(config.dataset_validation.nsd_samples_subjects_to_check[0]):02d}"
-    )
-
-    load_betas_subset(config, overwrite=False, subj_to_pick=subj_to_pick)
-
-    # 3.
 
 
 def pipeline_t_testing(config: Configuration):
     # 1. generate t-testing results
     subjects = subjects_list_unifier(config.pipeline.step_3_t_testing.subjects, False)
 
-    if config.pipeline.step_1_preprocessing.extract_nsd_data:
+    if config.pipeline.step_3_t_testing.t_testing:
         logging.info(
             logging_message(config.pipeline.step_3_t_testing.step, "Starting T-Testing")
         )
@@ -75,18 +91,20 @@ def pipeline_t_testing(config: Configuration):
         logging.info(
             logging_message(config.pipeline.step_3_t_testing.step, "Skipping T-Testing")
         )
-    if "shared" in subjects:
-        shared = True
-        subjects_to_use = list(range(1, 8 + 1))
-        set_t_testing(config, subjects_to_use, shared)
 
-        subjects.remove("shared")
-        shared = False
-        set_t_testing(config, subjects, shared)
+    if config.pipeline.step_3_t_testing.t_testing:
+        if "shared" in subjects:
+            shared = True
+            subjects_to_use = list(range(1, 8 + 1))
+            set_t_testing(config, subjects_to_use, shared)
 
-    else:
-        shared = False
-        set_t_testing(config, subjects, shared)
+            subjects.remove("shared")
+            shared = False
+            set_t_testing(config, subjects, shared)
+
+        else:
+            shared = False
+            set_t_testing(config, subjects, shared)
 
     subjects = subjects_list_unifier(config.pipeline.step_3_t_testing.subjects, False)
 
@@ -165,8 +183,18 @@ def pipeline_rsa(config: Configuration):
             set_to_take = f"subj_{subject:02d}"
             subject_list = [subject]
 
+        for sub in subject_list:
+            if set_to_take == "shared":
+                shared_bool = True
+            else:
+                shared_bool = False
+
+            modify_mask_with_ttest(config, 3.0, shared_bool, sub)
+
         for mask_value in mask_values:
-            create_rdm(config, subject_list, mask_value, set_to_take, mode="averaged")
+            create_rdm(
+                config, subject_list, mask_value, set_to_take, 2.0, mode="averaged"
+            )
 
 
 def pipeline_gaussian(config: Configuration):
@@ -203,16 +231,21 @@ def pipeline_gaussian(config: Configuration):
 if __name__ == "__main__":
     config = load_config("config.yaml")
     # 1. Extract and preprocess nsd data
-    extract_nsd_data(config)
+    if config.pipeline.step_1_preprocessing.execute_step:
+        extract_nsd_data(config)
 
     # 2.
-    pipeline_labelling(config)
+    if config.pipeline.step_2_dataset_creation.execute_step:
+        pipeline_labelling(config)
 
     # 3. perform t-testing - create siginficance maps
-    pipeline_t_testing(config)
+    if config.pipeline.step_3_t_testing.execute_step:
+        pipeline_t_testing(config)
 
     # 4. perform RSA; create RDM and MDS spaces
-    pipeline_rsa(config)
+    if config.pipeline.step_4_rsa_analysis.execute_step:
+        pipeline_rsa(config)
 
     # 5. fit gaussian in mds space
-    pipeline_gaussian(config)
+    if config.pipeline.step_5_gaussian_fitting.execute_step:
+        pipeline_gaussian(config)

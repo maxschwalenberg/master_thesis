@@ -49,17 +49,22 @@ def get_coco_image_labels(image_id, coco_instance: COCO):
 def filter_full_nsd_df(df: pd.DataFrame, config: Configuration):
     conditions = []
 
-    if "shared" in config.nsd_samples_subjects_to_check:
+    if "shared" in config.pipeline.step_2_dataset_creation.subjects:
         conditions.append(("amount_participants", {8}))
 
         # Erstelle eine neue Liste ohne "shared"
         subjects = {
-            int(s) for s in config.nsd_samples_subjects_to_check if s != "shared"
+            int(s)
+            for s in config.pipeline.step_2_dataset_creation.subjects
+            if s != "shared"
         }
         conditions.append(("subject", subjects))
     else:
         conditions.append(
-            ("subject", {int(s) for s in config.nsd_samples_subjects_to_check})
+            (
+                "subject",
+                {int(s) for s in config.pipeline.step_2_dataset_creation.subjects},
+            )
         )
 
     # Filtere die DataFrame-Zeilen basierend auf den Bedingungen

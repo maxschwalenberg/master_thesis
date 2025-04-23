@@ -2,18 +2,18 @@
 directories:
   images_target_dir: data/images
   excel_files_target_dir: data/labels
-  image_betas_dir: data/image_betas
+  image_betas_dir: data/image_betas_stan
   t_test_results_dir: data/t_test_results
   t_test_roi_dir: data/t_test_roi
-  mds_dir: data/mds_dir
-  rdm_dir: data/rdm_dir
+  mds_dir: data/mds_dir_stan_data
+  rdm_dir: data/rdm_dir_stan_data
   gaussian_fit_results_dir: data/gaussian_results
 
 # NSD data locations
 nsd_data:
   nsddata_responses_tsv_dir: data/nsddata_tsv
   nsddata_betas_dir: /media/harveylab/STORAGE1_NA/NSD/nsddata_betas
-  full_brain_data_dir: /media/harveylab/STORAGE1_NA/NSD/full_brain_max
+  full_brain_data_dir: /media/harveylab/STORAGE1_NA/NSD/full_brain_no_processing
 
   stans_thesis_repo_data: /media/harveylab/storage2/stan-thesis/data/
   mask_data_dir: mask
@@ -74,11 +74,15 @@ dataset_validation:
 
 pipeline:
   step_1_preprocessing:
+    execute_step: false
+
     step: 1
     extract_nsd_data: true
-    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Define subjects for extraction
+    subjects: [1] # Define subjects for extraction
 
   step_2_dataset_creation:
+    execute_step: true
+
     download_data: true
     create_data_split: true
     face_detection: true
@@ -87,10 +91,12 @@ pipeline:
     remove_nans: true
     label_data: true
     load_betas: true
-    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for dataset creation
+    subjects: [5] # Subjects for dataset creation
     step: 2
 
   step_3_t_testing:
+    execute_step: false
+
     t_testing: true
     subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for t-testing
     step: 3
@@ -99,13 +105,25 @@ pipeline:
     clipping_value: 7
 
   step_4_rsa_analysis:
+    execute_step: true
+
+    only_face_set: true
+    distance_metric: "correlation"
     rsa_analysis: true
     subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for RSA
     step: 4
 
   step_5_gaussian_fitting:
+    execute_step: false
+
     fit_gaussian: true
-    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for Gaussian fitting
+    visualize: true
+    evaluate: true
+
+    t_test_filtering: 0.0
+    sigma_filtering: [0, 100]
+
+    subjects: [1] # Subjects for Gaussian fitting
     step: 5
 
   overwrite_existing: false # Global overwrite flag

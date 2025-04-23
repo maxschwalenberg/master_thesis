@@ -1,17 +1,21 @@
 from dataclasses import dataclass
 import yaml
-from typing import List, Dict
+from typing import List, Dict, Union
 
 
 @dataclass
 class PreprocessingConfig:
     extract_nsd_data: bool
+    execute_step: bool
+
     subjects: List[str]  # List of subjects, including "shared"
     step: int
 
 
 @dataclass
 class DatasetCreationConfig:
+    execute_step: bool
+
     download_data: bool
     create_data_split: bool
     face_detection: bool
@@ -26,6 +30,8 @@ class DatasetCreationConfig:
 
 @dataclass
 class TTestingConfig:
+    execute_step: bool
+
     t_testing: bool
     step: int
     subjects: List[str]
@@ -36,6 +42,10 @@ class TTestingConfig:
 
 @dataclass
 class RSAAnalysisConfig:
+    execute_step: bool
+
+    only_face_set: bool
+    distance_metric: str
     rsa_analysis: bool
     step: int
     subjects: List[str]
@@ -43,7 +53,14 @@ class RSAAnalysisConfig:
 
 @dataclass
 class GaussianFittingConfig:
+    execute_step: bool
+
     fit_gaussian: bool
+    visualize: bool
+    evaluate: bool
+    sigma_filtering: Union[int, int]
+
+    t_test_filtering: float
     step: int
     subjects: List[str]
 
