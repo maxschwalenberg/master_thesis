@@ -5,9 +5,11 @@ directories:
   image_betas_dir: data/image_betas_stan
   t_test_results_dir: data/t_test_results
   t_test_roi_dir: data/t_test_roi
-  mds_dir: data/mds_dir_stan_data
-  rdm_dir: data/rdm_dir_stan_data
+  mds_dir: data/mds/mds_dir_stan_data
+  rdm_dir: data/rdm/rdm_dir_stan_data
   gaussian_fit_results_dir: data/gaussian_results
+  output_dir: data/output
+  activations_dir: data/activations
 
 # NSD data locations
 nsd_data:
@@ -66,7 +68,7 @@ nsd_project:
 analysis:
   subjects_to_analyze: [1] # [1, 2, 3, 7]
   rois_to_analyze:
-    { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8 }
+    { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9" : 9}
 
 # Dataset validation parameters
 dataset_validation:
@@ -83,34 +85,34 @@ pipeline:
   step_2_dataset_creation:
     execute_step: true
 
-    download_data: true
-    create_data_split: true
+    download_data: false
+    create_data_split: false
     face_detection: true
-    generate_non_face_set: true
-    generate_positive_set: true
-    remove_nans: true
-    label_data: true
-    load_betas: true
-    subjects: [5] # Subjects for dataset creation
+    generate_non_face_set: false
+    generate_positive_set: false
+    remove_nans: false
+    label_data: false
+    load_betas: false
+    subjects: [1] # Subjects for dataset creation
     step: 2
 
   step_3_t_testing:
     execute_step: false
 
-    t_testing: true
-    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for t-testing
+    t_testing: false
+    subjects: [1] # Subjects for t-testing
     step: 3
 
     thresholds_map: [0.0, 2.0, 3.0, 4.0, 5.0]
     clipping_value: 7
 
   step_4_rsa_analysis:
-    execute_step: true
+    execute_step: false
 
-    only_face_set: true
+    only_face_set: false
     distance_metric: "correlation"
     rsa_analysis: true
-    subjects: ["shared", 1, 2, 3, 4, 5, 6, 7, 8] # Subjects for RSA
+    subjects: [1] # Subjects for RSA
     step: 4
 
   step_5_gaussian_fitting:

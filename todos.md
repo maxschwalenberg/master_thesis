@@ -82,3 +82,15 @@ labeled ROIs:
 
 - violin plot
 - permutation analysis of pairwise MDS distance and bounding box distances
+
+- check permutations with other masks as well
+
+---
+
+- compare position of face to other features (viewing angle? - roll/yaw of face, age, size of bounding box, distance between eyes, nose size, .... anatomical features)
+
+- results writeup of all the done analyses
+
+- if multiple significant features: GLM of these features in MDS space?
+
+- compare results with RSA in neural network

@@ -47,6 +47,7 @@ def generate_face_detection_results(config: Configuration):
     app = FaceAnalysis(
         providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
         name="buffalo_l",
+        allowed_modules=["detection", "landmark_2d_106", "genderage"],
     )
     app.prepare(ctx_id=0, det_size=(640, 640))
     for nsd_subj_subset in subjects:
@@ -103,12 +104,37 @@ def generate_face_detection_results(config: Configuration):
 
                 faces = app.get(img)
                 detections = []
+                kps_iter = []
+                landmarks_iter = []
+                gender_iter = []
+                age_iter = []
 
                 for face in faces:
                     bbox = face.bbox.astype(int).tolist()
+                    kps = face.kps.astype(float).tolist()
+                    landmarks = face.landmark_2d_106.astype(float).tolist()
+
+                    
+                    gender = int(face.gender)
+                    age = face.age
+
+
+                    assert isinstance(gender, int)
+                    assert isinstance(age, int)
+
+
                     detections.append(bbox)
+                    kps_iter.append(kps)
+                    landmarks_iter.append(landmarks)
+                    gender_iter.append(gender)
+                    age_iter.append(age)
 
                 res["detection"] = detections
+                res["kps"] = kps_iter
+                res["landmarks"] = landmarks_iter
+                res["gender"] = gender_iter
+                res["age"] = age_iter
+
                 detection_results.append(res)
 
             else:

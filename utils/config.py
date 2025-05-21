@@ -84,6 +84,8 @@ class Directories:
     mds_dir: str
     rdm_dir: str
     gaussian_fit_results_dir: str
+    output_dir: str
+    activations_dir: str
 
 
 @dataclass

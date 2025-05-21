@@ -307,6 +307,9 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
     for selected_subj in tqdm(subjs_to_use):
         logging.info(f"Generating for subject {selected_subj}")
+        run_both = False
+        negative_sets = []
+
         if shared_set:
             positive_set_excel = pd.read_excel(
                 os.path.join(
@@ -327,10 +330,38 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
                     config.dataset_creation.subset_animate_non_face_final,
                 )
             )
-            negative_set_filenames = negative_set_excel["file_name"].tolist()
-            negative_set_filenames = [
-                e.split("/")[1].split(".")[0] for e in negative_set_filenames
-            ]
+
+            labels = negative_set_excel["label"].tolist()
+            set_labels = list(set(labels))
+            if "personen" in set_labels or "animals" in set_labels:
+                run_both = True
+
+            if run_both:
+                negative_set_filenames = negative_set_excel[
+                    negative_set_excel["label"] == "animals"
+                ]["file_name"].tolist()
+                negative_set_filenames = [
+                    e.split("/")[1].split(".")[0] for e in negative_set_filenames
+                ]
+
+                negative_sets.append(("animals", negative_set_filenames))
+
+                negative_set_filenames = negative_set_excel[
+                    negative_set_excel["label"] == "personen"
+                ]["file_name"].tolist()
+                negative_set_filenames = [
+                    e.split("/")[1].split(".")[0] for e in negative_set_filenames
+                ]
+
+                negative_sets.append(("personen", negative_set_filenames))
+
+            else:
+                negative_set_filenames = negative_set_excel["file_name"].tolist()
+                negative_set_filenames = [
+                    e.split("/")[1].split(".")[0] for e in negative_set_filenames
+                ]
+
+                negative_sets.append(("animate", negative_set_filenames))
         else:
             positive_set_excel = pd.read_excel(
                 os.path.join(
@@ -351,13 +382,42 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
                     config.dataset_creation.subset_animate_non_face_final,
                 )
             )
-            negative_set_filenames = negative_set_excel["file_name"].tolist()
-            negative_set_filenames = [
-                e.split("/")[1].split(".")[0] for e in negative_set_filenames
-            ]
+
+            labels = negative_set_excel["label"].tolist()
+            set_labels = list(set(labels))
+            if "personen" in set_labels or "animals" in set_labels:
+                run_both = True
+
+            print(f"{run_both=}\t{set_labels=}")
+
+            if run_both:
+                negative_set_filenames = negative_set_excel[
+                    negative_set_excel["label"] == "animals"
+                ]["file_name"].tolist()
+                negative_set_filenames = [
+                    e.split("/")[1].split(".")[0] for e in negative_set_filenames
+                ]
+
+                negative_sets.append(("animals", negative_set_filenames))
+
+                negative_set_filenames = negative_set_excel[
+                    negative_set_excel["label"] == "personen"
+                ]["file_name"].tolist()
+                negative_set_filenames = [
+                    e.split("/")[1].split(".")[0] for e in negative_set_filenames
+                ]
+
+                negative_sets.append(("personen", negative_set_filenames))
+
+            else:
+                negative_set_filenames = negative_set_excel["file_name"].tolist()
+                negative_set_filenames = [
+                    e.split("/")[1].split(".")[0] for e in negative_set_filenames
+                ]
+
+                negative_sets.append(("animate", negative_set_filenames))
 
         positive_set_data = []
-        negative_set_data = []
 
         for file_name in positive_set_filenames:
             if file_name in missing_subjects:
@@ -392,78 +452,83 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
             # positive_set_data.append(data)
 
-        for file_name in negative_set_filenames:
-            if file_name in missing_subjects:
-                if selected_subj in missing_subjects[file_name]:
-                    logging.info(
-                        f"Skipping {file_name} because it is missing in betas data!"
-                    )
-                    continue
+        for prefix_result_file, negative_set_filenames in negative_sets:
+            logging.info(f"Generating for {prefix_result_file}")
+            negative_set_data = []
 
-            path = os.path.join(config.directories.image_betas_dir, file_name)
-            subj_path = os.path.join(path, f"subj_{selected_subj:02d}")
+            for file_name in negative_set_filenames:
+                if file_name in missing_subjects:
+                    if selected_subj in missing_subjects[file_name]:
+                        logging.info(
+                            f"Skipping {file_name} because it is missing in betas data!"
+                        )
+                        continue
 
-            files = glob.glob(os.path.join(subj_path, "*.npy"))
+                path = os.path.join(config.directories.image_betas_dir, file_name)
+                subj_path = os.path.join(path, f"subj_{selected_subj:02d}")
 
-            # ---------------Average
-            arrays = []
+                files = glob.glob(os.path.join(subj_path, "*.npy"))
 
-            # Load each file and append the array to the list
-            for file in files:
-                array = np.load(file)
-                is_nan = np.isnan(np.sum(array))
-                assert not is_nan, f"NaN values found in {file}"
-                arrays.append(array)
+                # ---------------Average
+                arrays = []
 
-            # Concatenate all arrays along a new axis
-            concatenated = np.stack(arrays, axis=0)
+                # Load each file and append the array to the list
+                for file in files:
+                    array = np.load(file)
+                    is_nan = np.isnan(np.sum(array))
+                    assert not is_nan, f"NaN values found in {file}"
+                    arrays.append(array)
 
-            # Compute the average across the new axis
-            # data = np.mean(concatenated, axis=0)
-            for sample in concatenated:
-                negative_set_data.append(sample)
+                # Concatenate all arrays along a new axis
+                concatenated = np.stack(arrays, axis=0)
 
-            # negative_set_data.append(data)
+                # Compute the average across the new axis
+                # data = np.mean(concatenated, axis=0)
+                for sample in concatenated:
+                    negative_set_data.append(sample)
 
-        positive_set_data = np.array(positive_set_data)
-        negative_set_data = np.array(negative_set_data)
+                # negative_set_data.append(data)
 
-        # detect_nan_rows_and_columns
-        print(f"positive: {detect_nan_rows_and_columns(positive_set_data)}")
-        print(f"negative: {detect_nan_rows_and_columns(negative_set_data)}")
+            positive_set_data = np.array(positive_set_data)
+            negative_set_data = np.array(negative_set_data)
 
-        logging.info("Generating statistics...")
-        voxel_results = []
-        for i in tqdm(range(positive_set_data.shape[1])):
-            positive_voxel_set = positive_set_data[:, i]
-            negative_voxel_set = negative_set_data[:, i]
+            # detect_nan_rows_and_columns
+            print(f"positive: {detect_nan_rows_and_columns(positive_set_data)}")
+            print(f"negative: {detect_nan_rows_and_columns(negative_set_data)}")
 
-            t_statistic, p_value = stats.ttest_ind(
-                positive_voxel_set,
-                negative_voxel_set,
-                equal_var=False,
-            )
+            logging.info("Generating statistics...")
+            voxel_results = []
+            for i in tqdm(range(positive_set_data.shape[1])):
+                positive_voxel_set = positive_set_data[:, i]
+                negative_voxel_set = negative_set_data[:, i]
 
-            voxel_results.append([t_statistic, p_value])
+                t_statistic, p_value = stats.ttest_ind(
+                    positive_voxel_set,
+                    negative_voxel_set,
+                    equal_var=False,
+                )
 
-        voxel_results = np.array(voxel_results)
+                voxel_results.append([t_statistic, p_value])
 
-        if shared_set:
+            voxel_results = np.array(voxel_results)
+
+            if shared_set:
+                results_file_path = os.path.join(
+                    config.directories.t_test_results_dir, "shared"
+                )
+            else:
+                results_file_path = os.path.join(
+                    config.directories.t_test_results_dir, f"subj_{selected_subj:02d}"
+                )
+
+            os.makedirs(results_file_path, exist_ok=True)
+
             results_file_path = os.path.join(
-                config.directories.t_test_results_dir, "shared"
-            )
-        else:
-            results_file_path = os.path.join(
-                config.directories.t_test_results_dir, f"subj_{selected_subj:02d}"
+                results_file_path,
+                f"result_{prefix_result_file}_subj_{selected_subj:02d}.npy",
             )
 
-        os.makedirs(results_file_path, exist_ok=True)
-
-        results_file_path = os.path.join(
-            results_file_path, f"result_subj_{selected_subj:02d}.npy"
-        )
-
-        np.save(results_file_path, voxel_results)
+            np.save(results_file_path, voxel_results)
 
 
 if __name__ == "__main__":
