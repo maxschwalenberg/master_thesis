@@ -293,6 +293,7 @@ def set_voxelwise_outlier_detection(
 
 def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
     subjs_to_use_stringed = [str(f"{e:02d}") for e in subjs_to_use]
+    
 
     if shared_set:
         with open(
@@ -363,6 +364,16 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
                 negative_sets.append(("animate", negative_set_filenames))
         else:
+
+            logging.info(f"Subject {selected_subj} - augmenting with shared set")
+            
+            shared_positive_set_excel = pd.read_excel(
+                os.path.join(
+                    config.directories.excel_files_target_dir,
+                    "shared",
+                    config.dataset_creation.subset_animate_face_final,
+                )
+            )
             positive_set_excel = pd.read_excel(
                 os.path.join(
                     config.directories.excel_files_target_dir,
@@ -370,7 +381,7 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
                     config.dataset_creation.subset_animate_face_final,
                 )
             )
-            positive_set_filenames = positive_set_excel["file_name"].tolist()
+            positive_set_filenames = positive_set_excel["file_name"].tolist() + shared_positive_set_excel["file_name"].tolist()
             positive_set_filenames = [
                 e.split("/")[1].split(".")[0] for e in positive_set_filenames
             ]
@@ -452,6 +463,7 @@ def set_t_testing(config: Configuration, subjs_to_use: list, shared_set: bool):
 
             # positive_set_data.append(data)
 
+        quit()
         for prefix_result_file, negative_set_filenames in negative_sets:
             logging.info(f"Generating for {prefix_result_file}")
             negative_set_data = []

@@ -92,6 +92,7 @@ def retrieve_stacked_betas(
     subj_to_check="shared",
     only_face_set=True,
     randomization: bool = False,
+    augment_shared_set: bool = False,
 ):
     assert mode in ["averaged", "single", "multiple"]
 
@@ -126,7 +127,15 @@ def retrieve_stacked_betas(
         config.directories.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
-    subset = pd.read_excel(set_excel_path)
+    if augment_shared_set:
+        logging.info(f"Augmenting with shared set")
+        shared_path = os.path.join(config.directories.excel_files_target_dir, "shared", label_subset_name)
+        subset = pd.concat([pd.read_excel(set_excel_path), pd.read_excel(shared_path)], ignore_index=True)
+
+    else:
+        logging.info(f"Not augmenting with shared set")
+        subset = pd.read_excel(set_excel_path)
+
 
     if only_face_set:
         pass
@@ -214,6 +223,7 @@ def retrieve_stacked_betas_test(
     subj: int,
     subj_to_check="shared",
     label_subset_name: str = None,
+    augment_shared_set: bool = False,
 ):
     betas_dir = config.directories.image_betas_dir
 
@@ -226,7 +236,18 @@ def retrieve_stacked_betas_test(
         config.directories.excel_files_target_dir, subj_to_check, label_subset_name
     )
 
+    
+
     positive_subset = pd.read_excel(positive_set_excel_path)
+
+    if augment_shared_set:
+        logging.info(f"Augmenting with shared set")
+        shared_path = os.path.join(config.directories.excel_files_target_dir, "shared", label_subset_name)
+        positive_subset = pd.concat([positive_subset, pd.read_excel(shared_path)], ignore_index=True)
+
+    else:
+        logging.info(f"Not augmenting with shared set")
+
     positive_filenames = positive_subset["cocoId"].to_list()
     filenames_nsd_number = positive_subset["nsdId"].to_list()
 
@@ -288,7 +309,84 @@ def retrieve_stacked_betas_test(
     return np.stack(data)
 
 
-# from utils.config import load_config, Configuration
+import os
+import pandas as pd
+from utils.config import Configuration
 
-# config = load_config("config.yaml")
-# retrieve_roi_mask(config, 1)
+def load_negative_set(
+    config: Configuration,
+    subj_to_check: str,
+    label_subset_name: str = None,
+    augment_shared_set: bool = False,
+    remove_animate_face: bool = False,
+):
+    """
+    Load the negative set for a subject, with optional augmentation and filtering.
+
+    Parameters
+    ----------
+    config : Configuration
+        Your config object (must have .directories.excel_files_target_dir and
+        .dataset_creation.subset_animate_non_face_final, .dataset_creation.shared_animate_non_face_final).
+    subj : int
+        Subject ID to load.
+    subj_to_check : str
+        (unused here, but kept for compatibility).
+    label_subset_name : str, optional
+        Override the per‐subject filename for the negative‐set sheet.
+    augment_shared_set : bool
+        If True, also load and concatenate the shared negative‐set sheet.
+    remove_animate_face : bool
+        If True, drop rows where label == "animate_face".
+    """
+    # 1) Load per‐subject sheet
+    subset_fname = config.dataset_creation.subset_animate_non_face_final
+    subj_dir = os.path.join(
+        config.directories.excel_files_target_dir,
+        subj_to_check
+    )
+    personal_path = os.path.join(subj_dir, subset_fname)
+    neg_df = pd.read_excel(personal_path)
+
+    # 2) Optionally augment with shared sheet
+    if augment_shared_set:
+        shared_fname = "shared"
+        shared_path = os.path.join(config.directories.excel_files_target_dir, shared_fname, subset_fname)
+        shared_df = pd.read_excel(shared_path)
+        neg_df = pd.concat([neg_df, shared_df], ignore_index=True)
+
+    # 3) Ensure there's a 'label' column
+    if 'label' not in neg_df.columns:
+        raise ValueError(f"No 'label' column in {personal_path!r}; found columns {list(neg_df.columns)}")
+
+    # 4) Drop generic 'animate' rows
+    neg_df = neg_df[neg_df['label'] != 'animate']
+
+    # 5) Check for ONLY the allowed labels
+    allowed = {'animate_persons', 'animate_face', 'animate_animal'}
+    found = set(neg_df['label'].unique())
+    bad = found - allowed
+    if bad:
+        raise ValueError(
+            f"Found unsupported labels {bad}. "
+            f"Labels must be one of {allowed} (or 'animate', which is auto‐dropped)."
+        )
+
+    # 6) Optionally remove animate_face
+    if remove_animate_face:
+        neg_df = neg_df[neg_df['label'] != 'animate_face']
+
+    # 7) Ensure we still have samples
+    if neg_df.empty:
+        raise ValueError("After filtering, no negative examples remain! Aborting.")
+
+    # 8) Extract bare filenames (no path, no extension)
+    filenames = (
+        neg_df['file_name']
+          .apply(lambda p: os.path.splitext(os.path.basename(p))[0])
+          .tolist()
+    )
+
+    # 9) Return a single‐element list of (name, file_list)
+    name = label_subset_name or 'animate'
+    return [(name, filenames)]

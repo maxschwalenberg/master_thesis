@@ -251,9 +251,9 @@ def adjust_labelled_data(
 
                     all_nan.append(True)
                     nan_count = np.sum(np.isnan(sample))
-                    # print(
-                    #     f"{valid_filename}\t{npy_file}\tNumber of NaN values: {nan_count}",
-                    # )
+                    print(
+                        f"{valid_filename}\t{npy_file}\tNumber of NaN values: {nan_count} / {np.shape(sample)}",
+                    )
 
                 else:
                     all_nan.append(False)
@@ -298,6 +298,8 @@ def adjust_labelled_data(
 
         print()
 
+
+    quit()
     missing_nan_information_path = os.path.join(
         config.directories.excel_files_target_dir, subj_to_pick, "missing_nan_info.json"
     )

@@ -94,3 +94,38 @@ labeled ROIs:
 - if multiple significant features: GLM of these features in MDS space?
 
 - compare results with RSA in neural network
+
+
+--------------
+
+- add shared set to all subjects
+
+- voxel wise fitting variance explained by fitting on the betas
+--> should this be done a single time? or could I mix up training/test sets and do permutations of the fitting, evaluate, 
+and draw conclusions from that
+- mds space cortical distance relationship
+
+
+- make sure all ROIs are drawn correctly
+- name ROIs differently
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- in utils: for t-testing ... filter out negative set animate_face
+need to test function in utils and integrate into t-testing script; 
+needs testing and relabelling
+
+
+- test `create_rdm` shared set augmentation (happens in retrieve_stacked_betas; also test retrieve_stacked_betas_test)
+--> should be working rn

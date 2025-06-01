@@ -667,7 +667,11 @@ class Gaussian2DFitter:
 
 
 def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
+    augment_shared_set = True
+    
     rois = config.analysis.rois_to_analyze
+
+    logging.info(f"Augmenting with shared set: {augment_shared_set} \nROIs: {rois}")
 
     columns = [
         "x0",
@@ -695,10 +699,10 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
 
         mask = retrieve_roi_mask(config, subj, set_to_take, False)
         betas, _, mds_mapping = retrieve_stacked_betas(
-            config, subj, "averaged", 0, subj_to_check=set_to_take
+            config, subj, "averaged", 0, subj_to_check=set_to_take, augment_shared_set=augment_shared_set
         )
         betas_test = retrieve_stacked_betas_test(
-            config, subj, subj_to_check=set_to_take
+            config, subj, subj_to_check=set_to_take, augment_shared_set=augment_shared_set
         )
 
         if np.isnan(betas).any():
@@ -716,10 +720,10 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
             )
 
             mds_file = os.path.join(
-                "data/mds_dir",
+                config.directories.mds_dir,
                 set_to_take,
                 f"subj_{subj:02d}",
-                f"mask_{roi_mask_value}_averaged_mds.npy",
+                f"mask_{roi_mask_value}_averaged_both_mds.npy",
             )
             mds = np.load(mds_file, allow_pickle=True).astype(np.float32).T
 

@@ -48,6 +48,9 @@ def create_rdm(
     sample_to_pick: int = 0,
     randomization: bool = False,
 ):
+    
+    augment_shared_set = True
+
     assert mode in ["averaged", "single"]
     logging.info(f"Creating RDM for mode {mode} - T-Test THRESHOLD: {t_test_threshold}")
     logging.info(
@@ -95,6 +98,7 @@ def create_rdm(
             subj_to_check=set_to_take,
             only_face_set=config.pipeline.step_4_rsa_analysis.only_face_set,
             randomization=randomization,
+            augment_shared_set=augment_shared_set,
         )
         assert not np.isnan(betas).any()
         betas = np.transpose(betas)

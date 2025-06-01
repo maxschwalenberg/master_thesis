@@ -5,8 +5,8 @@ directories:
   image_betas_dir: data/image_betas_stan
   t_test_results_dir: data/t_test_results
   t_test_roi_dir: data/t_test_roi
-  mds_dir: data/mds/mds_dir_stan_data
-  rdm_dir: data/rdm/rdm_dir_stan_data
+  mds_dir: data/mds/final
+  rdm_dir: data/rdm/final
   gaussian_fit_results_dir: data/gaussian_results
   output_dir: data/output
   activations_dir: data/activations
@@ -64,11 +64,13 @@ nsd_project:
   proj_dir: /media/harveylab/storage2/stan-thesis
   betas_subdir: betas
 
+all_rois: { "LO2": 1, "LO1": 2, "hMT+/V5": 3, "OFA": 4, "?": 5, "PPA": 6, "FFA": 7, "V3A/V3B": 8, "RSC" : 9}
+
 # Subjects and ROIs to analyze
 analysis:
   subjects_to_analyze: [1] # [1, 2, 3, 7]
   rois_to_analyze:
-    { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9" : 9}
+    { "LO2": 1, "LO1": 2, "hMT+/V5": 3, "OFA": 4, "?": 5, "PPA": 6, "FFA": 7, "V3A/V3B": 8, "RSC" : 9}
 
 # Dataset validation parameters
 dataset_validation:
@@ -107,16 +109,16 @@ pipeline:
     clipping_value: 7
 
   step_4_rsa_analysis:
-    execute_step: false
+    execute_step: true
 
-    only_face_set: false
+    only_face_set: true
     distance_metric: "correlation"
     rsa_analysis: true
     subjects: [1] # Subjects for RSA
     step: 4
 
   step_5_gaussian_fitting:
-    execute_step: false
+    execute_step: true
 
     fit_gaussian: true
     visualize: true
@@ -129,3 +131,4 @@ pipeline:
     step: 5
 
   overwrite_existing: false # Global overwrite flag
+

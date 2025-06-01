@@ -47,13 +47,29 @@ def load_nonface_df(path: str) -> pd.DataFrame:
 def load_faces_df(path: str) -> pd.DataFrame:
     """Read the faces master sheet (with its current labels)."""
     df = pd.read_excel(path)
+    if 'cocoId' not in df.columns:
+        raise RuntimeError("Your nonface_xlsx must have a 'cocoId' column.")
+    
+
+    df['filename'] = df['cocoId'].apply(lambda x: f"{int(x):012d}.jpg")
+    if 'label' not in df.columns: # Ensure label column exists
+        df['label'] = 'face'
+
     return df
 
 def save_df(df: pd.DataFrame, path: str):
-    """Overwrite the animate‐nonface sheet in place."""
-    df_to_save = df.drop(columns=['filename'])
-   
-   
+    """Overwrite the animate‐nonface sheet in place, excluding 'unknown' labels."""
+    
+    # Filter out rows with label 'unknown'
+    df_filtered = df[df['label'] != 'unknown']
+
+    # Drop 'filename' column if it exists
+    if 'filename' in df_filtered.columns:
+        df_to_save = df_filtered.drop(columns=['filename'])
+    else:
+        df_to_save = df_filtered
+
+    # Save to Excel
     df_to_save.to_excel(path, index=False)
     st.success(f"Saved updates to {os.path.basename(path)}")
 
@@ -271,8 +287,10 @@ def main():
 
     # --- 1) Paths from your config.yaml ------------------------
     config = load_config("config.yaml")
-    subdir = "subj_02"  # adjust as needed
+    # subdir = "subj_02"  # adjust as needed
+    subdir = "subj_08"  # adjust as needed
     
+
     # Main list of images to potentially check
     df_to_check_path_faces = os.path.join(
         config.directories.excel_files_target_dir,

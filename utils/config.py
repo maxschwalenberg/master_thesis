@@ -159,6 +159,8 @@ class Configuration:
     dataset_validation: DatasetValidation
     pipeline: PipelineConfig  # Add the pipeline configuration
 
+    all_rois: Dict[str, int] 
+
 
 def load_config(config_file_path: str) -> Configuration:
     with open(config_file_path, "r") as f:
@@ -190,6 +192,7 @@ def load_config(config_file_path: str) -> Configuration:
                 **config_data["pipeline"]["step_5_gaussian_fitting"]
             ),
         ),
+        all_rois=config_data["all_rois"],
     )
 
     # Ensure dataset validation settings are correct
