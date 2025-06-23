@@ -625,7 +625,7 @@ def extract_activations(subj: int,
         h.remove()
 
 
-def visualize_model_graph(retina_model: RetinaFaceTorch, output_file: str = "retinaface_graph.pdf"):
+def visualize_model_graph(retina_model: RetinaFaceTorch, age_model: AgeGenderModel, ):
     """
     Generate and save a PDF visualization of the RetinaFaceTorch model architecture using torchviz.
     """
@@ -637,12 +637,46 @@ def visualize_model_graph(retina_model: RetinaFaceTorch, output_file: str = "ret
     # Build the graph including model parameters
     dot = make_dot(output[0], params=dict(retina_model.torch_model.named_parameters()))
     # Save the graph to a PDF file
-    dot.render(output_file, format="pdf")
-    print(f"Model graph saved as {output_file}")
+    dot.render(os.path.join("data", "neural_net_results", "retinaface_graph"), format="pdf")
 
 
-def _numeric_key(name: str) -> int:
+    # dummy_input = torch.randn(1, 3, 96, 96)
+    # age_model.torch_model.eval()
+    # output = age_model.torch_model(dummy_input)
+
+    # # Build the graph including model parameters
+    # dot = make_dot(output, params=dict(age_model.torch_model.named_parameters()))
+    # print(dot)
+    # # Save the graph to a PDF file
+    # dot.render(os.path.join("data", "neural_net_results", "genderage_graph"), format="pdf")
+    # 1) Do a forward pass
+    dummy_input = torch.randn(1, 3, 96, 96)
+    age_model.torch_model.eval()
+    output = age_model.torch_model(dummy_input)
+
+    # 2) Build the full dot graph (with every grad/param node)
+    dot = make_dot(output, params=dict(age_model.torch_model.named_parameters()))
+
+    # 3) Filter out:
+    #    • Any node whose label is "AccumulateGrad" (autograd)
+    #    • Any node whose label is "TBackward"    (autograd)
+    #    • Any parameter whose name ends in ".bias"
+    filtered_body = []
+    for line in dot.body:
+        if "AccumulateGrad" in line or "TBackward" in line or ".bias" in line:
+            continue
+        filtered_body.append(line)
+
+    # 4) Overwrite dot.body and render
+    dot.body = filtered_body
+    dot.render("simplified_graph", format="pdf", cleanup=True)
+
+
+
+def _numeric_key_detection(name: str) -> int:
     return int(name.split("_")[-1])
+def _numeric_key_genderage(name: str) -> int:
+    return int(name.split("_")[1])
 
 
 from multiprocessing import Process, Queue
@@ -815,9 +849,16 @@ def run_mantel_test_analysis(subj: int,
         # for layer in tqdm(sorted(all_layers), desc=f"{module} layers"):
         # bar = tqdm(total=len(all_layers), desc=f"{module} layers")
 
+        if module == "detection":
+            sorted_layers = sorted(all_layers, key=_numeric_key_detection)
+            
+        else:
+            sorted_layers = sorted(all_layers, key=_numeric_key_genderage)
+
         bar = tqdm(range(len(all_layers)), desc=f"{module} layers")
         for i in bar:
-            layer = sorted(all_layers, key=_numeric_key)[i]
+            
+            layer = sorted_layers[i]
             # Spawn a child process to compute RDM, MDS, and Mantel tests
             queue = Queue()
             p = Process(
@@ -942,7 +983,6 @@ def main():
     run_sanity_check(app, sample_image_path)
     # Output files
     mantel_output_excel = os.path.join("data", "neural_net_results", f"subj_{subj:02d}", f"results.xlsx")
-    model_graph_pdf = "retinaface_graph.pdf"
 
     # 1) Example usage: detect faces, predict age/gender
     
@@ -960,7 +1000,8 @@ def main():
     # 3) Visualize the RetinaFaceTorch model graph and save as PDF
     print("\n=== Visualizing Model Graph ===")
     retina_model = RetinaFaceTorch(model_file=retina_model_path)
-    visualize_model_graph(retina_model, output_file=model_graph_pdf)
+    age_model = AgeGenderModel(model_path=age_gender_model_path)
+    visualize_model_graph(retina_model, age_model)
 
     # 4) Run Mantel test analysis on saved activations
     print("\n=== Running Mantel Test Analysis ===")
@@ -974,7 +1015,7 @@ def main():
         activations_dir=activations_dir,
         output_excel=mantel_output_excel,
         metadata=metadata,
-        modules=["detection"],  # Change to ["detection", "genderage"] if needed
+        modules=["genderage"],  # Change to ["detection", "genderage"] if needed
         B=2000
     )
 

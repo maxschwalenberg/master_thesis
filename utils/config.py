@@ -86,6 +86,9 @@ class Directories:
     gaussian_fit_results_dir: str
     output_dir: str
     activations_dir: str
+    # matlab_masks_dir: str
+
+    distances_dir: str
 
 
 @dataclass

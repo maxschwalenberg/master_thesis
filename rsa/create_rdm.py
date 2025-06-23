@@ -1,6 +1,7 @@
 import os
 import glob
 import time
+from typing import Union
 import numpy as np
 from scipy.spatial.distance import pdist
 from previousCode.nsddatapaper_rsa.utils.utils import mds
@@ -38,19 +39,29 @@ def emd(u, v):
     return wasserstein_distance(u, v)
 
 
+def _make_fname(mask_value, mode, hemisphere, rnd, rnd_offset, sample, suffix):
+    parts = [f"mask_{mask_value}", mode]
+    if mode == "single":
+        parts.append(f"sample_{sample}")
+    parts += [hemisphere]
+    if rnd:
+        parts.append(f"rand_{rnd_offset}")
+    return "_".join(parts) + f"_{suffix}.npy"
+
+
 def create_rdm(
     config: Configuration,
     list_subj,
-    mask_value: int,
+    mask_value: Union[int, list[int]],
     set_to_take: str,
     t_test_threshold: float,
     mode="averaged",
     sample_to_pick: int = 0,
     randomization: bool = False,
+    augment_shared_set:bool = True,
+    randomize_offset: int = 0
 ):
     
-    augment_shared_set = True
-
     assert mode in ["averaged", "single"]
     logging.info(f"Creating RDM for mode {mode} - T-Test THRESHOLD: {t_test_threshold}")
     logging.info(
@@ -60,6 +71,15 @@ def create_rdm(
     logging.info(
         f"Using positive set: {os.path.join(set_to_take, config.dataset_creation.subset_animate_face_final)}"
     )
+
+    if isinstance(mask_value, int):
+        mask_values = [mask_value]
+    elif isinstance(mask_value, list):
+        mask_values = mask_value.copy()
+    else:
+        raise ValueError()
+
+    logging.info(f"Mask Values for RDM creation: {mask_values=}")
 
     if mode == "single":
         logging.info(f"Picking sample {sample_to_pick}")
@@ -99,6 +119,7 @@ def create_rdm(
             only_face_set=config.pipeline.step_4_rsa_analysis.only_face_set,
             randomization=randomization,
             augment_shared_set=augment_shared_set,
+            seed_offset=randomize_offset
         )
         assert not np.isnan(betas).any()
         betas = np.transpose(betas)
@@ -145,85 +166,90 @@ def create_rdm(
 
             logging.info(f"Processing hemisphere '{hemisphere}' for subject {sub:02d}")
 
-            # Create the voxel mask based on mask_value
-            if isinstance(mask_value, int):
+            
+            
+            for mask_value in mask_values:
                 masked_voxels = current_mask == mask_value
-            elif isinstance(mask_value, list):
-                masked_voxels = np.isin(current_mask, mask_value)
-            else:
-                raise ValueError("mask_value must be either an int or a list of ints")
+                
+            
+                
 
-            # Define output file paths
-            if mode == "averaged":
-                rdm_file = os.path.join(
-                    rdm_dir_subject, f"mask_{mask_value}_{mode}_{hemisphere}_rdm.npy"
+                base_kwargs = dict(
+                    mask_value=mask_value,
+                    mode=mode,
+                    hemisphere=hemisphere,
+                    rnd=randomization,
+                    rnd_offset=randomize_offset,
+                    sample=sample_to_pick,
                 )
-                mds_file = os.path.join(
-                    mds_dir_subject, f"mask_{mask_value}_{mode}_{hemisphere}_mds.npy"
-                )
-            elif mode == "single":
+
                 rdm_file = os.path.join(
                     rdm_dir_subject,
-                    f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_{hemisphere}_rdm.npy",
+                    _make_fname(**base_kwargs, suffix="rdm")
                 )
                 mds_file = os.path.join(
                     mds_dir_subject,
-                    f"mask_{mask_value}_{mode}_sample_{sample_to_pick}_{hemisphere}_mds.npy",
+                    _make_fname(**base_kwargs, suffix="mds")
                 )
 
-            # Apply the mask to the beta values for this hemisphere
-            masked_betas = current_betas[masked_voxels, :]
 
-            if np.isnan(masked_betas).any():
-                raise ValueError("Found NaNs in masked betas!")
+                if os.path.exists(rdm_file) and os.path.exists(mds_file):
+                    logging.info(f"Already exists...")
+                    continue
 
-            # Remove any voxels which contain any NaN values along the feature axis.
-            good_vox = [np.sum(np.isnan(x)) == 0 for x in masked_betas]
-            masked_betas = masked_betas[good_vox, :]
+                # Apply the mask to the beta values for this hemisphere
+                masked_betas = current_betas[masked_voxels, :]
 
-            if masked_betas.shape[0] == 0:
+                if np.isnan(masked_betas).any():
+                    raise ValueError("Found NaNs in masked betas!")
+
+                # Remove any voxels which contain any NaN values along the feature axis.
+                good_vox = [np.sum(np.isnan(x)) == 0 for x in masked_betas]
+                masked_betas = masked_betas[good_vox, :]
+
+                if masked_betas.shape[0] == 0:
+                    logging.info(
+                        f"All voxels have NaN values ... {mask_value=} for hemisphere '{hemisphere}'"
+                    )
+                    continue  # Skip to the next hemisphere analysis
+
                 logging.info(
-                    f"All voxels have NaN values ... {mask_value=} for hemisphere '{hemisphere}'"
+                    f"Shape of masked betas for mask value {mask_value}, hemisphere '{hemisphere}': {masked_betas.shape}"
                 )
-                continue  # Skip to the next hemisphere analysis
 
-            logging.info(
-                f"Shape of masked betas for mask value {mask_value}, hemisphere '{hemisphere}': {masked_betas.shape}"
-            )
+                if np.isnan(masked_betas).any():
+                    masked_betas = masked_betas[~np.isnan(masked_betas).any(axis=1), :]
 
-            if np.isnan(masked_betas).any():
-                masked_betas = masked_betas[~np.isnan(masked_betas).any(axis=1), :]
+                # Transpose for distance computation (features as rows)
+                X = masked_betas.T
+                logging.info(f"Masked betas shape for distance computation: {X.shape}")
 
-            # Transpose for distance computation (features as rows)
-            X = masked_betas.T
-            logging.info(f"Masked betas shape for distance computation: {X.shape}")
+                # Determine which distance metric to use
+                if config.pipeline.step_4_rsa_analysis.distance_metric != "wasserstein":
+                    metric_to_use = config.pipeline.step_4_rsa_analysis.distance_metric
+                else:
+                    metric_to_use = emd  # assuming emd is defined/imported
 
-            # Determine which distance metric to use
-            if config.pipeline.step_4_rsa_analysis.distance_metric != "wasserstein":
-                metric_to_use = config.pipeline.step_4_rsa_analysis.distance_metric
-            else:
-                metric_to_use = emd  # assuming emd is defined/imported
+                # Compute the RDM using pdist (e.g. from scipy.spatial.distance)
+                rdm = pdist(X, metric=metric_to_use)
+                logging.info(
+                    f"Computed RDM shape for hemisphere '{hemisphere}': {rdm.shape}"
+                )
 
-            # Compute the RDM using pdist (e.g. from scipy.spatial.distance)
-            rdm = pdist(X, metric=metric_to_use)
-            logging.info(
-                f"Computed RDM shape for hemisphere '{hemisphere}': {rdm.shape}"
-            )
+                if np.any(np.isnan(rdm)):
+                    raise ValueError("NaN values found in RDM")
 
-            if np.any(np.isnan(rdm)):
-                raise ValueError("NaN values found in RDM")
+                np.save(rdm_file, rdm)
+                logging.info(f"Saved RDM to {rdm_file}")
 
-            np.save(rdm_file, rdm)
-            logging.info(f"Saved RDM to {rdm_file}")
-
-            # Load the RDM back and run MDS (assuming mds() is defined/imported)
-            rdm_loaded = np.load(rdm_file, allow_pickle=True).astype(np.float32)
-            mds_out = mds(rdm_loaded).astype(np.float32)
-            logging.info(
-                f"MDS output shape for hemisphere '{hemisphere}': {mds_out.shape}"
-            )
-            np.save(mds_file, mds_out)
-            logging.info(f"Saved MDS output to {mds_file}")
+                # Load the RDM back and run MDS (assuming mds() is defined/imported)
+                rdm_loaded = np.load(rdm_file, allow_pickle=True).astype(np.float32)
+                mds_out = mds(rdm_loaded).astype(np.float32)
+                logging.info(
+                    f"MDS output shape for hemisphere '{hemisphere}': {mds_out.shape}"
+                )
+                np.save(mds_file, mds_out)
+                logging.info(f"Saved MDS output to {mds_file}")
 
         # if np.isnan(betas).any():
         #       # SUBJ06 AND SUBJ08 Have NaNs for some  reason: need to remove and replace. Can't do before because of the masking

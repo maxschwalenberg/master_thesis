@@ -71,6 +71,7 @@ def generate_face_detection_results(config: Configuration):
         )
 
         if os.path.exists(face_det_results_path):
+            logging.info(f"Results already exist ... Skipping!")
             with open(face_det_results_path, "r") as f:
                 existing_results = json.load(f)
                 checked_files = [

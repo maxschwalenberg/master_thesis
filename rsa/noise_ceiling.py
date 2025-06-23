@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 # from utils.utils import *
 
-from utils.utils import retrieve_stacked_betas, retrieve_stacked_betas_test
+from utils.utils import retrieve_stacked_betas#, retrieve_stacked_betas_test
 from utils.config import Configuration, load_config
 
 # from utils.split_condition import split_conditions
@@ -22,9 +22,13 @@ def compute_noise_ceilling(config: Configuration, shared_set: bool, subject: int
     betas_train, _, _ = retrieve_stacked_betas(
         config, subject, "averaged", 0, subj_to_check=subject_to_pick
     )
-    betas_test = retrieve_stacked_betas_test(
-        config, subject, subj_to_check=subject_to_pick
+
+    betas_test, _, _ = retrieve_stacked_betas(
+        config, subject, "averaged", 0, subj_to_check=subject_to_pick, test=True
     )
+    # betas_test = retrieve_stacked_betas_test(
+    #     config, subject, subj_to_check=subject_to_pick
+    # )
 
     results = []
     noise_ceilling_all_vox = np.zeros(betas_train.shape[1])

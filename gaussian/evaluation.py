@@ -9,7 +9,7 @@ from scipy.optimize import curve_fit
 from utils.config import load_config, Configuration
 from utils.utils import (
     retrieve_stacked_betas,
-    retrieve_stacked_betas_test,
+    # retrieve_stacked_betas_test,
     retrieve_roi_mask,
     filter_roi_mask,
     logging_message,
@@ -99,7 +99,13 @@ def load_data(config: Configuration, subj, mask_value, set_to_take):
     betas, _, mds_mapping = retrieve_stacked_betas(
         config, subj, "averaged", 0, subj_to_check=set_to_take
     )
-    betas_test = retrieve_stacked_betas_test(config, subj, subj_to_check=set_to_take)
+    # betas_test = retrieve_stacked_betas_test(config, subj, subj_to_check=set_to_take)
+
+    betas_test, _, _ = retrieve_stacked_betas(
+        config, subj, "averaged", 0, subj_to_check=set_to_take, test=True
+    )
+
+
     mask_voxel_indices = filter_roi_mask(mask_value, mask)[0]
     betas_masked = betas.T[mask_voxel_indices]
     betas_test_masked = betas_test.T[mask_voxel_indices]

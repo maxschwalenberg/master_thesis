@@ -193,12 +193,20 @@ def pipeline_rsa(config: Configuration):
 
         for mask_value in mask_values:
             create_rdm(
-                config, subject_list, mask_value, set_to_take, 3.0, mode="averaged"
+                config,
+                subject_list,
+                mask_value,
+                set_to_take,
+                3.0,
+                mode="averaged",
+                randomization=True,
             )
 
 
 def pipeline_gaussian(config: Configuration):
-    subjects = subjects_list_unifier(config.pipeline.step_5_gaussian_fitting.subjects, False)
+    subjects = subjects_list_unifier(
+        config.pipeline.step_5_gaussian_fitting.subjects, False
+    )
 
     if config.pipeline.step_1_preprocessing.extract_nsd_data:
         logging.info(

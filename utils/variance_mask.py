@@ -5,6 +5,7 @@ import numpy as np
 import logging
 import pandas as pd
 from tqdm import tqdm
+import math
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,88 +14,98 @@ logging.basicConfig(
 )
 
 
-def create_variance_mask(
-    config: Configuration,
-    subj_to_pick_shared: bool,
-    subj_to_pick: int,
-):
-    """
-    Creates variance mask files based on Gaussian fit results.
+def cartesian_to_polar_normalized(x, y):
+    # radius
+    r = math.hypot(x, y)
+    # atan2 returns radians in (-π, π]; convert to degrees and wrap to [0,360)
+    theta_deg = math.degrees(math.atan2(y, x)) % 360
+    # normalize to [0,1)
+    theta_norm = theta_deg / 360.0
+    return r, theta_deg, theta_norm
 
-    Args:
-        config: Configuration object containing necessary paths
-        subj_to_pick_shared: Boolean indicating whether to use shared subject data
-        subj_to_pick: Subject ID number to process
-    """
+
+import os
+import nibabel as nib
+import numpy as np
+from tqdm import tqdm
+
+def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_to_pick: int):
     hemis = ["lh", "rh"]
-    mask_dir = config.t_test_roi_dir
-
-    # Calculate the directory path once
     subset = "shared" if subj_to_pick_shared else f"subj_{subj_to_pick:02d}"
-
-    # Load all Excel files in one pass
+    mask_dir = config.directories.t_test_roi_dir
     gaussian_results_dir = os.path.join(
-        config.gaussian_fit_results_dir,
+        config.directories.gaussian_fit_results_dir,
         f"subj_{subj_to_pick:02d}",
         f"subj{subj_to_pick:02d}",
     )
 
-    # Load all Excel results into a single DataFrame
     results_df = load_excel_files(gaussian_results_dir)
+    # … build var_train_lookup, pos_x_lookup, pos_y_lookup, sigma_lookup as before …
+    results_df = results_df[results_df["mds_hemi"] == "both"]
 
-    # Create a lookup dictionary for faster access
-    var_train_lookup = {}
-    if not results_df.empty:
-        # Create a dictionary mapping original_index to var_train for O(1) lookups
-        var_train_lookup = dict(
-            zip(results_df["original_index"], results_df["var_train"])
-        )
+    # Create a dictionary mapping original_index to var_train for O(1) lookups
+    var_train_lookup = dict(
+        zip(results_df["original_index"], results_df["var_train"])
+    )
 
-    # Process each hemisphere
+    pos_x_lookup = dict(zip(results_df["original_index"], results_df["x0"]))
+    pos_y_lookup = dict(zip(results_df["original_index"], results_df["y0"]))
+
+    sigma_lookup = dict(zip(results_df["original_index"], results_df["sigma"]))
+
     vertex_offset = 0
     for hemi in hemis:
-        # Construct file paths
-        maskdata_in_file = os.path.join(
+        mask_path = os.path.join(
             mask_dir, subset, f"{hemi}.subj{subj_to_pick:02d}.testrois.mgz"
         )
-        data_out_file = os.path.join(
-            config.freesurfer_dir,
-            f"subj{subj_to_pick:02d}",
-            "label",
-            f"{hemi}.variance_map.mgz",
-        )
+        maskdata = nib.load(mask_path).get_fdata().squeeze()
 
-        # Skip if output already exists
-        if os.path.exists(data_out_file):
-            logging.info(f"File {data_out_file} already exists, skipping")
-            # Update vertex offset for next hemisphere
-            if hemi == "lh":
-                vertex_offset = (
-                    nib.load(maskdata_in_file).get_fdata().squeeze().shape[0]
-                )
-            continue
+        # Prepare containers and output paths in one place
+        map_types = {
+            "variance": np.zeros_like(maskdata),
+            "angle":    np.zeros_like(maskdata),
+            "radius":   np.zeros_like(maskdata),
+            "sigma":    np.zeros_like(maskdata),
+        }
+        out_paths = {
+            key: os.path.join(
+                config.nsd_data.freesurfer_dir,
+                f"subj{subj_to_pick:02d}",
+                "label",
+                f"{hemi}.fits_{key}.mgz" if key != "variance" else f"{hemi}.variance_map.mgz"
+            )
+            for key in map_types
+        }
 
-        # Load mask data
-        maskdata = nib.load(maskdata_in_file).get_fdata().squeeze()
-
-        # Pre-allocate output array
-        data_out = np.zeros(maskdata.shape)
-
-        # Process vertices
+        # Fill them
         for i in tqdm(range(maskdata.shape[0]), desc=f"Processing {hemi}"):
-            index = i + vertex_offset
-            var_train_value = var_train_lookup.get(index)
-            if var_train_value is not None:
-                data_out[i] = var_train_value
+            idx = i + vertex_offset
+            vt = var_train_lookup.get(idx)
+            x0 = pos_x_lookup.get(idx)
+            y0 = pos_y_lookup.get(idx)
+            sig = sigma_lookup.get(idx)
 
-        # Save the output
-        img = nib.Nifti1Image(np.expand_dims(data_out, axis=(1, 2)), np.eye(4))
-        nib.loadsave.save(img, data_out_file)
-        logging.info(f"Saved to {data_out_file}")
+            if vt is not None:
+                map_types["variance"][i] = vt
+            if x0 is not None and y0 is not None and sig is not None:
+                r, theta, tnorm = cartesian_to_polar_normalized(x0, y0)
+                map_types["angle"][i]  = tnorm
+                map_types["radius"][i] = r
+                # clamp sigma into [0,2], then normalize
+                map_types["sigma"][i]  = max(0, min(sig, 2)) / 2
 
-        # Update vertex offset for right hemisphere
+        # Save all four in a loop
+        for key, arr in map_types.items():
+            img = nib.Nifti1Image(
+                np.expand_dims(arr, axis=(1, 2)), 
+                np.eye(4)
+            )
+            nib.save(img, out_paths[key])
+            logging.info(f"Saved {key} map to {out_paths[key]}")
+
         if hemi == "lh":
             vertex_offset = maskdata.shape[0]
+
 
 
 def load_excel_files(directory):

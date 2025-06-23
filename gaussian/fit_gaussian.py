@@ -6,14 +6,17 @@ import scipy.optimize as opt
 import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
+from functools import partial
+
 
 
 from utils.config import load_config, Configuration
 from utils.utils import (
     retrieve_stacked_betas,
     retrieve_roi_mask,
+    retrieve_roi_mask_extended,
     filter_roi_mask,
-    retrieve_stacked_betas_test,
+    #retrieve_stacked_betas_test,
 )
 
 import logging
@@ -477,6 +480,30 @@ class Gaussian2DFitter:
 
         # Return the updated parameters with unchanged x0, y0, and sigma
         return [rescaled_slope, x0, y0, sigma, rescaled_intercept]
+    
+
+
+    def gaussian_fixed_params(self, mds, intercept, slope, x0, y0, sigma):
+        # we’ll pass slope,x0,y0,sigma via partial()
+        return self.gaussian_2d_cartesian(mds, slope, x0, y0, sigma, intercept)
+
+    def offset_rescale_with_fit(self, voxel_activity_test):
+        slope, x0, y0, sigma, intercept = self.params
+
+        # freeze all but intercept
+        fit_func = partial(self.gaussian_fixed_params, slope=slope, x0=x0, y0=y0, sigma=sigma)
+
+        popt, _ = curve_fit(
+            fit_func,
+            self.mds,
+            voxel_activity_test,
+            p0=[intercept],          # only intercept is free
+            bounds=([-np.inf], [np.inf]),
+            maxfev=1000
+        )
+
+        new_intercept, = popt
+        return [slope, x0, y0, sigma, new_intercept]
 
 
 # def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
@@ -674,6 +701,7 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
     logging.info(f"Augmenting with shared set: {augment_shared_set} \nROIs: {rois}")
 
     columns = [
+        "mds_hemi",
         "x0",
         "y0",
         "sigma",
@@ -683,13 +711,18 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         "var_train",
         "var_test",
         "var_test_rescaled",
+        "var_test_rescaled_offset",
         "noise_ceiling",
         "model_performance",
         "noise_ceiling_non_rescaled",
         "model_performance_non_rescaled",
         "rescaled_slope",
         "rescaled_intercept",
-    ]
+        "original_index"
+    ]   
+
+    randomization = True
+    augment_shared_set = True
 
     for i, subj in enumerate(subj_list):
         gaussian_fit_result_dir_path = os.path.join(
@@ -697,13 +730,19 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         )
         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
 
-        mask = retrieve_roi_mask(config, subj, set_to_take, False)
+
+        mask, lh_size = retrieve_roi_mask_extended(config, subj, set_to_take, False, t_test_threshold=3.0)
+        # mask = retrieve_roi_mask(config, subj, set_to_take, False)
         betas, _, mds_mapping = retrieve_stacked_betas(
-            config, subj, "averaged", 0, subj_to_check=set_to_take, augment_shared_set=augment_shared_set
+            config, subj, "averaged", 0, subj_to_check=set_to_take, augment_shared_set=augment_shared_set, randomization=randomization
         )
-        betas_test = retrieve_stacked_betas_test(
-            config, subj, subj_to_check=set_to_take, augment_shared_set=augment_shared_set
+
+        betas_test, _, _ = retrieve_stacked_betas(
+            config, subj, "averaged", 0, subj_to_check=set_to_take, test=True, augment_shared_set=augment_shared_set, randomization=randomization
         )
+        # betas_test = retrieve_stacked_betas_test(
+        #     config, subj, subj_to_check=set_to_take, augment_shared_set=augment_shared_set
+        # )
 
         if np.isnan(betas).any():
             raise ValueError("Found NaNs")
@@ -719,13 +758,42 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 f"fitted_voxels_mask_{roi_mask_value}.xlsx",
             )
 
-            mds_file = os.path.join(
-                config.directories.mds_dir,
-                set_to_take,
-                f"subj_{subj:02d}",
-                f"mask_{roi_mask_value}_averaged_both_mds.npy",
-            )
-            mds = np.load(mds_file, allow_pickle=True).astype(np.float32).T
+            hemis = ["both", "lh", "rh"]
+            mds_paths = []
+
+            for hemi in hemis:
+                if randomization:
+                    randomize_offset = 0
+                    mds_file = os.path.join(
+                        config.directories.mds_dir,
+                        set_to_take,
+                        f"subj_{subj:02d}",
+                        f"mask_{roi_mask_value}_averaged_{hemi}_rand_{randomize_offset}_mds.npy",
+                    )
+                else:
+                    mds_file = os.path.join(
+                        config.directories.mds_dir,
+                        set_to_take,
+                        f"subj_{subj:02d}",
+                        f"mask_{roi_mask_value}_averaged_{hemi}_mds.npy",
+                    )
+
+                mds_paths.append(mds_file)
+
+            existences = [os.path.exists(mds_file) for mds_file in mds_paths]
+            assert len(set(existences)) == 1, "Should have either no hemi of this ROI or all!"
+            if existences[0]:
+                pass
+            else:
+                print(f"Skipping ROI={roi} - not present")
+                continue
+
+            mds_both = np.load(mds_paths[0], allow_pickle=True).astype(np.float32).T
+            mds_lh =  np.load(mds_paths[1], allow_pickle=True).astype(np.float32).T
+            mds_rh = np.load(mds_paths[2], allow_pickle=True).astype(np.float32).T
+
+            mdss = [mds_both, mds_lh, mds_rh]
+
 
             mask_voxel_indices = filter_roi_mask(roi_mask_value, mask)
             mask_voxel_indices = mask_voxel_indices[0]
@@ -737,47 +805,88 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 fits_roi = pd.read_excel(gaussian_result_file_path)
             else:
                 fits_roi = pd.DataFrame(columns=columns)
+                    # check voxel index for hemisphere belonging
+
+
+
                 for voxel_i in tqdm(mask_voxel_indices):
-                    voxel_activity = betas[:, voxel_i]
-                    voxel_activity_test = betas_test[:, voxel_i]
+                    if voxel_i < lh_size:
+                        hemis_to_check = ["both", "lh"]
+                    else:
+                        hemis_to_check = ["both", "rh"]
+                    
+                    for hemi in hemis_to_check:
+                        hemi_index = hemis.index(hemi)
 
-                    fitter = Gaussian2DFitter(use_polar=True)
-                    x_samples, y_samples = (mds[0, :], mds[1, :])
+                        mds = mdss[hemi_index]
+                        x_samples, y_samples = (mds[0, :], mds[1, :])
 
-                    popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
+                        
 
-                    A, x0, y0, sigma, intercept = popt
-                    slope = A
+                        voxel_activity = betas[:, voxel_i]
+                        voxel_activity_test = betas_test[:, voxel_i]
 
-                    voxel_fit = [
-                        x0,
-                        y0,
-                        sigma,
-                        slope,
-                        intercept,
-                        solved,
-                        np.nan,  # var_train
-                        np.nan,  # var_test
-                        np.nan,  # var_test_rescaled
-                        np.nan,  # noise_ceiling
-                        np.nan,  # model_performance
-                        np.nan,  # noise_ceiling_non_rescaled
-                        np.nan,  # model_performance_non_rescaled
-                        np.nan,  # rescaled_slope
-                        np.nan,  # rescaled_intercept
-                    ]
-                    fits_roi.loc[voxel_i] = voxel_fit
+                        fitter = Gaussian2DFitter(use_polar=True)
 
-                fits_roi["original_index"] = fits_roi.index
-                fits_roi = fits_roi.reset_index(drop=True)
+                        popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
+
+                        A, x0, y0, sigma, intercept = popt
+                        slope = A
+
+                        voxel_fit = [
+                            hemi,
+                            x0,
+                            y0,
+                            sigma,
+                            slope,
+                            intercept,
+                            solved,
+                            np.nan,  # var_train
+                            np.nan,  # var_test
+                            np.nan,  # var_test_rescaled
+                            np.nan,  # var_test_rescaled_offset
+                            np.nan,  # noise_ceiling
+                            np.nan,  # model_performance
+                            np.nan,  # noise_ceiling_non_rescaled
+                            np.nan,  # model_performance_non_rescaled
+                            np.nan,  # rescaled_slope
+                            np.nan,  # rescaled_intercept
+                            voxel_i
+                        ]
+                        fits_roi.loc[len(fits_roi)] = voxel_fit
+                        # fits_roi.loc[voxel_i] = voxel_fit
+
+                # fits_roi["original_index"] = fits_roi.index
+                # fits_roi = fits_roi.reset_index(drop=True)
                 fits_roi.to_excel(gaussian_result_file_path, index=False)
+
+
+            # make sure all columns are actually present
+            for col in columns:
+                # 1. Initialize the new column
+                if col not in fits_roi.columns:
+                    fits_roi[col] = np.nan
+
+            # for col in fits_roi.columns:
+            #     if col not in columns:
+            #         print(f"Column {col} is in dataframe but shouldn't be there...")
+            #         remove = input(f"Say 'Y' if column should be removed!")
+            #         if remove == "Y":
+            #             fits_roi.drop(columns=[col], inplace=True)
+
 
             # Recalculate metrics for all voxels
             logging.info("Recalculating metrics for all voxels...")
-            x_samples, y_samples = mds[0, :], mds[1, :]
             for index, row in tqdm(
                 fits_roi.iterrows(), total=len(fits_roi), desc="Processing voxels"
             ):
+
+                hemi = row["mds_hemi"]
+                hemi_index = hemis.index(hemi)
+
+                mds = mdss[hemi_index]            
+                x_samples, y_samples = mds[0, :], mds[1, :]
+
                 voxel_i = row["original_index"]
                 fitter = Gaussian2DFitter(use_polar=False)
                 fitter.mds = (x_samples, y_samples)
@@ -821,9 +930,35 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                     row["sigma"],
                     rescaled_intercept,
                 ]
+                # this computes var_test_rescaled bc the params were adjusted to the test set in the above step
                 var_test_rescaled = fitter.variance_explained(
                     (x_samples, y_samples), voxel_test
                 )
+
+
+                # re-init to actual fit so that these params are used for offset rescaling
+                fitter.params = [
+                    row["slope"],
+                    row["x0"],
+                    row["y0"],
+                    row["sigma"],
+                    row["intercept"],
+                ]
+                same_slope, same_x0, same_y0, same_sigma, new_intercept = fitter.offset_rescale_with_fit(voxel_test)
+                assert same_slope == row["slope"] and same_x0 == row["x0"] # ....
+                fitter.params = [
+                    row["slope"],
+                    row["x0"],
+                    row["y0"],
+                    row["sigma"],
+                    new_intercept,
+                ]
+
+                var_test_rescaled_offset = fitter.variance_explained(
+                    (x_samples, y_samples), voxel_test
+                )
+
+
 
                 model_perf = (
                     var_test_rescaled / noise_ceiling if noise_ceiling != 0 else 0.0
@@ -834,6 +969,8 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 fits_roi.at[index, "var_train"] = var_train
                 fits_roi.at[index, "var_test"] = var_test
                 fits_roi.at[index, "var_test_rescaled"] = var_test_rescaled
+                fits_roi.at[index, "var_test_rescaled_offset"] = var_test_rescaled_offset
+
 
                 fits_roi.at[index, "noise_ceiling"] = noise_ceiling
                 fits_roi.at[index, "model_performance"] = model_perf

@@ -10,6 +10,9 @@ directories:
   gaussian_fit_results_dir: data/gaussian_results
   output_dir: data/output
   activations_dir: data/activations
+  # matlab_masks_dir: data/matlab_masks
+
+  distances_dir: data/distances
 
 # NSD data locations
 nsd_data:
@@ -65,6 +68,32 @@ nsd_project:
   betas_subdir: betas
 
 all_rois: { "LO2": 1, "LO1": 2, "hMT+/V5": 3, "OFA": 4, "?": 5, "PPA": 6, "FFA": 7, "V3A/V3B": 8, "RSC" : 9}
+
+# all_rois_fullnames = {
+#     "LO2": "Lateral Occipital area 2",
+#     "LO1": "Lateral Occipital area 1",
+#     "hMT+/V5": "Human Middle Temporal complex (V5)",
+#     "OFA": "Occipital Face Area",
+#     "?": "Unlabeled/Unspecified ROI",
+#     "PPA": "Parahippocampal Place Area",
+#     "FFA": "Fusiform Face Area",
+#     "V3A/V3B": "Visual areas 3A and 3B",
+#     "RSC": "Retrosplenial Cortex"
+# }
+
+# region_mapping = {
+#     8:  {"color": "bright red",   "region": "hMT⁺ (V5)",             "confidence": "moderate"},
+#     9:  {"color": "dark maroon",  "region": "pSTS face patch",      "confidence": "low"},
+#     3:  {"color": "cyan",         "region": "OFA",                   "confidence": "moderate"},
+#     1:  {"color": "royal blue",   "region": "FFA",                   "confidence": "high"},
+#     2:  {"color": "dodger blue",  "region": "FBA",                   "confidence": "moderate"},
+#     4:  {"color": "mint green",   "region": "EBA",                   "confidence": "moderate"},
+#     7:  {"color": "orange",       "region": "OPA (TOS)",             "confidence": "high"},
+#     6:  {"color": "yellow",       "region": "PPA",                   "confidence": "moderate"},
+#     5:  {"color": "lime green",   "region": "ATFA",                  "confidence": "low"},
+# }
+
+
 
 # Subjects and ROIs to analyze
 analysis:

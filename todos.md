@@ -97,17 +97,12 @@ labeled ROIs:
 
 
 --------------
-
-- add shared set to all subjects
-
 - voxel wise fitting variance explained by fitting on the betas
 --> should this be done a single time? or could I mix up training/test sets and do permutations of the fitting, evaluate, 
 and draw conclusions from that
 - mds space cortical distance relationship
 
 
-- make sure all ROIs are drawn correctly
-- name ROIs differently
 
 
 
@@ -129,3 +124,62 @@ needs testing and relabelling
 
 - test `create_rdm` shared set augmentation (happens in retrieve_stacked_betas; also test retrieve_stacked_betas_test)
 --> should be working rn
+
+
+
+---------------------------
+
+- var test rescaling version with only offset change (amplitude fixed)
+
+
+
+goal: want to find out if there are brain areas that ??? (dont exactly know anymore what ben said)
+- challenges:
+  rdm high dim ; only gonna work if there is a relationship between train/test -> RDM repeatability correlation between sets
+  if there is still relationship : check for cortical surface correlation
+  this is the precondition for any possible findings
+
+- outline betas preprocessing and difference of repeatability result using different preprocessing techniques / no preprocessing technique
+
+
+
+
+
+
+
+
+- idea: refactor beta loading ... extract the betas unprocessed and save the necessary stats per session in an additional file so the betas can be recomputed/processed/standardized on the fly
+
+
+
+
+
+- bug: only one beta for subject 5,6,8 (judging by MDS/RDM results)
+ --> why is the result so different compared to the graphic i have in my thesis already
+
+
+
+
+
+
+ -----------------------------------
+ - TODO: parameterize rsa/gaussian fit randomize order
+- for p-value plot ... don't use 0.00....xxx but use < 0.05 instead
+
+
+- make sure all ROIs are drawn correctly
+- name ROIs differently
+
+- regenerate the shared face detection results ... for some reason its excactly doubled
+
+
+
+- permutation testing
+  - RDM (shuffle rows of train set; keep test set the same)
+  - triangle approach as well -> compare images distances not just to the own distances but all others as well
+  - spearman correlation also ... shuffle cortical distances or mds distances and then repeat the correlation
+
+- generate separate MDS spaces for the two hemispheres!!! 
+----> filter mask 9 for ROI values thresholds!!
+
+debug results by visualizing

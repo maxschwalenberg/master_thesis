@@ -179,13 +179,13 @@ def modify_mask_with_ttest(
             # Majority are positive: keep voxels with t >= threshold
             keep_voxels = roi_t_values >= threshold
             logging.info(
-                f"ROI {label}: majority positive (pos={pos_count}, neg={neg_count}) - keeping voxels with t >= {threshold}"
+                f"ROI {label}: majority positive (pos={pos_count}, neg={neg_count}) - keeping voxels with t >= {threshold} --> keep={keep_voxels.sum()}"
             )
         else:
             # Majority are negative: keep voxels with t <= -threshold
             keep_voxels = roi_t_values <= -threshold
             logging.info(
-                f"ROI {label}: majority negative (pos={pos_count}, neg={neg_count}) - keeping voxels with t <= {-threshold}"
+                f"ROI {label}: majority negative (pos={pos_count}, neg={neg_count}) - keeping voxels with t <= {-threshold} --> keep={keep_voxels.sum()}"
             )
 
         # Set voxels that do not meet the condition to 0 in the mask
@@ -213,6 +213,8 @@ def modify_mask_with_ttest(
     )
     nib.save(img_rh, new_mask_path_rh)
     logging.info(f"Saving modified right hemisphere mask to {new_mask_path_rh}")
+
+    
 
 
 if __name__ == "__main__":
