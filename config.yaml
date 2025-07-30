@@ -14,6 +14,18 @@ directories:
 
   distances_dir: data/distances
 
+saved_results_paths:
+  sample_repeatability_distances_pickle: sample_repeatability_distances.pkl
+  sample_repeatability_distances_excel: sample_repeatability_distances.xlsx
+  sample_repeatability_correlations_true_excel: sample_repeatability_correlations_true.xlsx
+  sample_repeatability_correlations_null_excel: sample_repeatability_correlations_null.xlsx
+
+
+  spearman_correlations_pickle: spearman_correlations.pkl
+  spearman_correlations_excel: spearman_correlations.xlsx
+
+  permutation_analysis_excel: permutation_analysis.xlsx
+
 # NSD data locations
 nsd_data:
   nsddata_responses_tsv_dir: data/nsddata_tsv

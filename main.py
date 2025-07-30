@@ -96,15 +96,15 @@ def pipeline_t_testing(config: Configuration):
         if "shared" in subjects:
             shared = True
             subjects_to_use = list(range(1, 8 + 1))
-            set_t_testing(config, subjects_to_use, shared)
+            set_t_testing(config, subjects_to_use, shared, True)
 
             subjects.remove("shared")
             shared = False
-            set_t_testing(config, subjects, shared)
+            set_t_testing(config, subjects, shared, True)
 
         else:
             shared = False
-            set_t_testing(config, subjects, shared)
+            set_t_testing(config, subjects, shared, True)
 
     subjects = subjects_list_unifier(config.pipeline.step_3_t_testing.subjects, False)
 
@@ -238,6 +238,15 @@ def pipeline_gaussian(config: Configuration):
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
+
+    from rsa.sample_repeatability import sample_repeatability_distances_data
+    from rsa.cortical_correlation import main as main_cortical
+    from rsa.permutation_analysis import generate_results
+
+    # generate_results()
+    # sample_repeatability_distances_data(config, range(1, 8+1))
+    # main_cortical()
+
     # 1. Extract and preprocess nsd data
     if config.pipeline.step_1_preprocessing.execute_step:
         extract_nsd_data(config)

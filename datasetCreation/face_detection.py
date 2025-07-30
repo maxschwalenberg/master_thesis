@@ -147,8 +147,3 @@ def generate_face_detection_results(config: Configuration):
 
         with open(face_det_results_path, "w") as f:
             json.dump(detection_results, f, indent=4)
-
-
-if __name__ == "__main__":
-    config = load_config("config.yaml")
-    generate_face_detection_results(config)

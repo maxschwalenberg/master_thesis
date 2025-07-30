@@ -1,25 +1,34 @@
-import os
+"""
+Gaussian Fitting Analysis Module
 
-import numpy as np
-from scipy.optimize import curve_fit
-import scipy.optimize as opt
-import matplotlib.pyplot as plt
-import pandas as pd
-from tqdm import tqdm
+This module implements 2D Gaussian fitting for neural voxel responses in MDS space.
+It includes functionality for fitting isotropic Gaussians in both Cartesian and polar
+coordinates, with support for positive/negative slopes and comprehensive performance metrics.
+"""
+
+# Standard library imports
+import os
+import pickle
+import logging
 from functools import partial
 
+# Third-party imports
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+import scipy.optimize as opt
+from tqdm import tqdm
 
-
+# Local imports
 from utils.config import load_config, Configuration
 from utils.utils import (
     retrieve_stacked_betas,
     retrieve_roi_mask,
     retrieve_roi_mask_extended,
     filter_roi_mask,
-    #retrieve_stacked_betas_test,
 )
-
-import logging
+from rsa.create_rdm import rdm_mds_from_betas
 
 
 logging.basicConfig(
@@ -29,16 +38,6 @@ logging.basicConfig(
 )
 
 
-params = {
-    "random": True,
-    "initial": (np.array([-0.4, -0.4, 0.01, 0.1, -2]), np.array([0.4, 0.4, 2, 10, 2])),
-    "bounds": (
-        np.array([-1.05, -1.05, 0.01, 1e-08, -np.inf]),
-        np.array([1.05, 1.05, np.inf, np.inf, np.inf]),
-    ),
-    "loss": "linear",
-    "method": "trf",
-}
 
 
 def find_positive_percentile(series):
@@ -64,7 +63,12 @@ def find_positive_percentile(series):
 
 
 class Gaussian2DFitter:
-    def __init__(self, use_polar: bool = False):
+    def __init__(
+        self,
+        use_polar: bool = False,
+        use_negative_slope: bool = False,
+        use_mixed_slope: bool = False,
+    ):
         """
         Initialize the fitter.
 
@@ -76,6 +80,8 @@ class Gaussian2DFitter:
         self.params = None  # Will hold [A, x0, y0, sigma]
         self.solved = False
         self.mds = (None, None)
+        self.use_negative_slope = use_negative_slope
+        self.use_mixed_slope = use_mixed_slope
 
     @staticmethod
     def gaussian_2d_cartesian(coords, A, x0, y0, sigma, intercept):
@@ -118,7 +124,7 @@ class Gaussian2DFitter:
         exponent = -(d**2) / (2 * sigma**2)
         return A * np.exp(exponent) + intercept
 
-    def fit(self, x_vals, y_vals, target_values):
+    def fit(self, x_vals, y_vals, target_values_train, target_values_test):
         """
         Fit the isotropic 2D Gaussian to the provided data, running multiple fits
         and selecting the best one (based on variance explained). If consecutive fits
@@ -138,7 +144,7 @@ class Gaussian2DFitter:
         self.mds = (x_vals, y_vals)
 
         max_outer_attempts = 4  # Maximum number of independent fit attempts
-        convergence_tol = 0.02  # Tolerance for considering two fits "almost the same"
+        convergence_tol = 0.04  # Tolerance for considering two fits "almost the same"
         stable_threshold = (
             2  # Number of consecutive fits with nearly identical R² to stop early
         )
@@ -150,16 +156,29 @@ class Gaussian2DFitter:
 
         for fit_iter in range(max_outer_attempts):
             # --- Prepare initial guess and bounds based on coordinate system ---
-            A0 = np.max(target_values)
+            A0 = np.max(target_values_train)
             if self.use_polar:
                 # Convert the Cartesian samples to polar coordinates.
                 r_samples = np.sqrt(x_vals**2 + y_vals**2)
                 theta_samples = np.arctan2(y_vals, x_vals)
-                sigma0 = max(np.std(r_samples), 1e-6)
+                # sigma0 = max(np.std(r_samples), 1e-6)
+
                 # Bounds: amplitude in [-10,10], r0 in [0,1], theta0 in [-pi,pi], sigma > 0, intercept in [-10,10].
-                lower_bounds = [0, 0, -np.pi, 1e-6, -10]
-                upper_bounds = [10, 1.0, np.pi, 30, 10]
+                # A, r0, theta0, sigma, intercept
+
+                if self.use_mixed_slope:
+                    lower_bounds = [-np.inf, 0, -np.pi, 0.01, -np.inf]
+                    upper_bounds = [np.inf, 1.0, np.pi, 20, np.inf]
+                else:
+                    if self.use_negative_slope:
+                        lower_bounds = [-np.inf, 0, -np.pi, 0.01, -np.inf]
+                        upper_bounds = [-0.1, 1.0, np.pi, 20, np.inf]
+                    else:
+                        lower_bounds = [0.1, 0, -np.pi, 0.01, -np.inf]
+                        upper_bounds = [np.inf, 1.0, np.pi, 20, np.inf]
+
             else:
+                raise (f"Only want to fit in polar space!!!")
                 sigma0 = max(np.std(x_vals), np.std(y_vals), 1e-6)
                 # Bounds for Cartesian fit: amplitude in [-10,10], x0,y0 within [-1, 1], sigma > 0, intercept in [-10,10].
                 lower_bounds = [0, -1, -1, 1e-6, -10]
@@ -172,18 +191,37 @@ class Gaussian2DFitter:
             while attempt <= 3 and not solved:
                 try:
                     if self.use_polar:
-                        # Initial guess for polar parameters: [A, r0, theta0, sigma, intercept]
-                        initial_guess = [
-                            np.random.uniform(0.01, A0),
-                            np.random.uniform(0, 1),
-                            np.random.uniform(-np.pi, np.pi),
-                            sigma0,
-                            np.random.uniform(-1, 1),
-                        ]
+                        if self.use_mixed_slope:
+                            initial_guess = [
+                                np.random.uniform(-3, 3),
+                                np.random.uniform(0, 0.5),
+                                np.random.uniform(-np.pi, np.pi),
+                                np.random.uniform(0.01, 2),
+                                np.random.uniform(-2, 2),
+                            ]
+                        else:
+                            # Initial guess for polar parameters: [A, r0, theta0, sigma, intercept]
+                            if self.use_negative_slope:
+                                initial_guess = [
+                                    np.random.uniform(-3, -0.1),
+                                    np.random.uniform(0, 0.5),
+                                    np.random.uniform(-np.pi, np.pi),
+                                    np.random.uniform(0.01, 2),
+                                    np.random.uniform(-2, 2),
+                                ]
+
+                            else:
+                                initial_guess = [
+                                    np.random.uniform(0.1, 3),
+                                    np.random.uniform(0, 0.5),
+                                    np.random.uniform(-np.pi, np.pi),
+                                    np.random.uniform(0.01, 2),
+                                    np.random.uniform(-2, 2),
+                                ]
                         popt, pcov = curve_fit(
                             Gaussian2DFitter.gaussian_2d_polar,
                             (r_samples, theta_samples),
-                            target_values,
+                            target_values_train,
                             p0=initial_guess,
                             bounds=(lower_bounds, upper_bounds),
                             maxfev=2000,
@@ -200,6 +238,8 @@ class Gaussian2DFitter:
                             intercept.item(),
                         ]
                     else:
+                        raise (f"Only want to fit in polar space!!!")
+
                         # Initial guess for Cartesian parameters: [A, x0, y0, sigma, intercept]
                         initial_guess = [
                             np.random.uniform(0.01, A0),
@@ -227,13 +267,32 @@ class Gaussian2DFitter:
 
             # In case all three attempts fail, use a fallback set of parameters.
             if not solved:
-                candidate_params = [np.mean(target_values).item(), 0, 0, 100, 0]
+                pcov = np.zeros((5,5))
+                if self.use_mixed_slope:
+                    candidate_params = [np.mean(target_values_train).item(), 0, 0, 100, 0]
+                else:
+                    if self.use_negative_slope:
+                        candidate_params = [
+                            min(0, np.mean(target_values_train).item()),
+                            0,
+                            0,
+                            100,
+                            0,
+                        ]
+                    else:
+                        candidate_params = [
+                            max(0, np.mean(target_values_train).item()),
+                            0,
+                            0,
+                            100,
+                            0,
+                        ]
 
             # Temporarily set self.params to candidate_params so we can compute R².
             saved_params = self.params
             self.params = candidate_params
             candidate_r2 = self.variance_explained(
-                (x_vals, y_vals), target_values, input_polar=False
+                (x_vals, y_vals), target_values_test, input_polar=False
             )
             # Restore self.params (we'll update it later if this candidate is the best)
             self.params = saved_params
@@ -242,6 +301,8 @@ class Gaussian2DFitter:
             if candidate_r2 > best_r2:
                 best_r2 = candidate_r2
                 best_params = candidate_params
+                best_pcov = pcov
+
                 overall_solved = solved
                 consecutive_stable = 0
             else:
@@ -257,8 +318,9 @@ class Gaussian2DFitter:
 
         # Store the best found parameters.
         self.params = best_params
+        self.pcov = best_pcov
         self.solved = overall_solved
-        return self.params, self.solved
+        return self.params, self.solved, self.pcov
 
     def predict(self, coords, input_polar: bool = False):
         """
@@ -386,7 +448,6 @@ class Gaussian2DFitter:
         """
         if len(train.shape) == 1:
             train = np.array([train])  # add a dimension for concat
-        # print(train.shape)
         train_ones = np.concatenate(
             (train, np.ones((train.shape[0], train.shape[1])))
         ).T
@@ -412,29 +473,12 @@ class Gaussian2DFitter:
     def variance_explained_noise_ceiling(
         self, coords, betas_test_voxel, noise_ceiling: float
     ):
-        # results = []
-        # noise_ceilling_all_vox = np.zeros(betas_train.shape[1])
-        # predictions = self.predict(coords, input_polar=input_polar)
-
-        # print(betas_train_voxel)
-        # print(betas_test_voxel)
-
         variance = self.variance_explained(coords, betas_test_voxel)
 
         noise_ceiling_variance = variance / noise_ceiling
 
         return noise_ceiling_variance
-        # # loop through each voxel (and n == n_dim_images)
-        # for row_i in tqdm(range(betas_train.shape[1])):
 
-        #     new_row, _ = self.rescale(current_row, betas_test[:, row_i])
-
-        #     rss = np.sum((new_row - betas_test[:, row_i]) ** 2)
-
-        #     variance = np.sum((betas_test[:, row_i] - np.mean(betas_test[:, row_i])) ** 2)
-        #     ve_voxels = 1 - rss / variance  # noise ceilling of all voxels in current roi
-
-        # noise_ceilling_all_vox[row_i] = ve_voxels
 
     def linearly_rescale_gaussian(self, voxel_activity_test):
         """
@@ -451,8 +495,35 @@ class Gaussian2DFitter:
         # Extract parameters from the fitted Gaussian model
         slope, x0, y0, sigma, intercept = self.params  # Unpacking parameters
         # Initial guess for Cartesian parameters: [A, x0, y0, sigma, intercept]
-        lower_bounds = [0, x0 - epsilon, y0 - epsilon, sigma - epsilon, -np.inf]
-        upper_bounds = [np.inf, x0 + epsilon, y0 + epsilon, sigma + epsilon, np.inf]
+
+        if self.use_mixed_slope:
+            lower_bounds = [
+                -np.inf,
+                x0 - epsilon,
+                y0 - epsilon,
+                sigma - epsilon,
+                -np.inf,
+            ]
+            upper_bounds = [np.inf, x0 + epsilon, y0 + epsilon, sigma + epsilon, np.inf]
+        else:
+            if self.use_negative_slope:
+                lower_bounds = [
+                    -np.inf,
+                    x0 - epsilon,
+                    y0 - epsilon,
+                    sigma - epsilon,
+                    -np.inf,
+                ]
+                upper_bounds = [0, x0 + epsilon, y0 + epsilon, sigma + epsilon, np.inf]
+            else:
+                lower_bounds = [0, x0 - epsilon, y0 - epsilon, sigma - epsilon, -np.inf]
+                upper_bounds = [
+                    np.inf,
+                    x0 + epsilon,
+                    y0 + epsilon,
+                    sigma + epsilon,
+                    np.inf,
+                ]
 
         # print(f"{self.mds=}")
         # print(f"{self.params=}")
@@ -468,20 +539,10 @@ class Gaussian2DFitter:
 
         rescaled_slope, x0, y0, sigma, rescaled_intercept = popt
 
-        # Compute scaling factors based on mean voxel activity
-        # scale_slope = np.mean(voxel_activity_test) / slope  # Scale factor for amplitude
-        # delta_intercept = (
-        #     np.mean(voxel_activity_test) - intercept
-        # )  # Difference in means for offset
-
-        # # Apply scaling
-        # rescaled_slope = slope * scale_slope
-        # rescaled_intercept = intercept + delta_intercept
+        
 
         # Return the updated parameters with unchanged x0, y0, and sigma
         return [rescaled_slope, x0, y0, sigma, rescaled_intercept]
-    
-
 
     def gaussian_fixed_params(self, mds, intercept, slope, x0, y0, sigma):
         # we’ll pass slope,x0,y0,sigma via partial()
@@ -491,214 +552,33 @@ class Gaussian2DFitter:
         slope, x0, y0, sigma, intercept = self.params
 
         # freeze all but intercept
-        fit_func = partial(self.gaussian_fixed_params, slope=slope, x0=x0, y0=y0, sigma=sigma)
+        fit_func = partial(
+            self.gaussian_fixed_params, slope=slope, x0=x0, y0=y0, sigma=sigma
+        )
 
         popt, _ = curve_fit(
             fit_func,
             self.mds,
             voxel_activity_test,
-            p0=[intercept],          # only intercept is free
+            p0=[intercept],  # only intercept is free
             bounds=([-np.inf], [np.inf]),
-            maxfev=1000
+            maxfev=1000,
         )
 
-        new_intercept, = popt
+        (new_intercept,) = popt
         return [slope, x0, y0, sigma, new_intercept]
 
 
-# def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
-#     rois = config.rois_to_analyze
+def fit_gaussian_params(
+    config: Configuration,
+    subj_list: list[int],
+    set_to_take: str,
+    use_negative_slope: bool = False,
+    use_mixed_slope: bool = False,
+    t_test_threshold: float = 3.0
+):
 
-#     # mds_file = "data/mds_dir/subj_01/1_mask20_mds_sample0.npy"
-#     # mds_file = os.path.join("data/mds_dir", f"subj_{subj:02d}", f"{subj}_mask20_mds_sample0.npy")
-
-#     # TODO
-#     # - load mask
-#     # for each ROI
-#     #   - get MDS space for corresponding ROI
-#     #   - get voxels for corresponding ROI
-#     #   - fit gaussian for each voxel of ROI
-#     #   - save fit
-
-#     columns_polar = ["ecc", "pol", "sigma", "slope", "intercept"]
-#     columns = [
-#         "x0",
-#         "y0",
-#         "sigma",
-#         "slope",
-#         "intercept",
-#         "solved",
-#         "var_train",
-#         "var_test",
-#         "noise_ceiling",
-#         "model_performance",
-#     ]
-#     initial = params["initial"]
-#     bounds = params["bounds"]
-
-#     for i, subj in enumerate(subj_list):
-#         gaussian_fit_result_dir_path = os.path.join(
-#             config.gaussian_fit_results_dir, set_to_take, f"subj{subj:02d}"
-#         )
-#         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
-
-#         mask = retrieve_roi_mask(config, subj, set_to_take)
-#         betas, _ = retrieve_stacked_betas(
-#             config, subj, "averaged", 0, subj_to_check=set_to_take
-#         )
-#         betas_test = retrieve_stacked_betas_test(
-#             config, subj, subj_to_check=set_to_take
-#         )
-
-#         if np.isnan(betas).any():
-#             raise ValueError("Found NaNs")
-
-#         logging.info(f"Starting fitting for subj{subj:02d}")
-
-#         for i, roi in enumerate(list(rois.keys())):
-#             logging.info(f"Fitting for ROI {roi}")
-#             roi_mask_value = rois[roi]
-
-#             gaussian_result_file_path = os.path.join(
-#                 gaussian_fit_result_dir_path,
-#                 f"fitted_voxels_mask_{roi_mask_value}.xlsx",
-#             )
-
-#             mds_file = os.path.join(
-#                 "data/mds_dir",
-#                 set_to_take,
-#                 f"subj_{subj:02d}",
-#                 f"mask_{roi_mask_value}_averaged_mds.npy",
-#             )
-#             mds = np.load(mds_file, allow_pickle=True).astype(np.float32).T
-
-#             mask_voxel_indices = filter_roi_mask(roi_mask_value, mask)
-#             mask_voxel_indices = mask_voxel_indices[0]
-
-#             # masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
-
-#             if os.path.exists(gaussian_result_file_path):
-#                 logging.info(
-#                     f"Loading existing gaussian fit results {gaussian_result_file_path}"
-#                 )
-#                 fits_roi = pd.read_excel(gaussian_result_file_path)
-
-#             else:
-#                 fits_roi = pd.DataFrame(columns=columns)
-
-#                 for voxel_i in tqdm(mask_voxel_indices):
-#                     voxel_activity = betas[:, voxel_i]
-#                     voxel_activity_test = betas_test[:, voxel_i]
-
-#                     fitter = Gaussian2DFitter(use_polar=True)
-
-#                     x_samples, y_samples = (mds[0, :], mds[1, :])
-#                     popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
-
-#                     noise_ceiling = fitter.compute_noise_ceiling(
-#                         voxel_activity, voxel_activity_test
-#                     )
-
-#                     var_train = fitter.variance_explained(
-#                         (x_samples, y_samples), voxel_activity
-#                     )
-#                     var_test = fitter.variance_explained(
-#                         (x_samples, y_samples), voxel_activity_test
-#                     )
-
-#                     model_performance_ceiling = fitter.variance_explained_noise_ceiling(
-#                         (x_samples, y_samples), voxel_activity_test, noise_ceiling
-#                     )
-
-#                     # print(f"{var_test=}")
-
-#                     # print(f"{var_noise_ceiling=}")
-#                     # quit()
-#                     A, x0, y0, sigma, intercept = popt
-
-#                     slope = A  # Directly assigning A as amplitude
-#                     voxel_fit = [
-#                         x0,
-#                         y0,
-#                         sigma,
-#                         slope,
-#                         intercept,
-#                         solved,
-#                         var_train,
-#                         var_test,
-#                         noise_ceiling,
-#                         model_performance_ceiling,
-#                     ]
-
-#                     fits_roi.loc[voxel_i] = voxel_fit
-
-#                 # Add the current index as a new column
-#                 fits_roi["original_index"] = fits_roi.index
-
-#                 # Reset the index to 0, 1, 2, ...
-#                 fits_roi = fits_roi.reset_index(drop=True)
-
-#                 fits_roi.to_excel(gaussian_result_file_path, index=False)
-
-#             # if true - no computation needed
-#             # if "variance_explained" in fits_roi.columns:
-#             if False:
-#                 logging.info("Variance explained already computed")
-
-#             else:
-#                 # print(fits_roi.head())
-#                 logging.info("Computing variance stats")
-#                 # Stabilizer for numerical calculations (avoids division by zero)
-#                 EPSILON = 0  # 1e-8
-
-#                 required_columns = [
-#                     "x0",
-#                     "y0",
-#                     "sigma",
-#                     "slope",
-#                     "intercept",
-#                 ]  # Modify as needed
-
-#                 # Extract only the relevant voxel indices from beta values
-#                 # (n_samples, n_voxels)
-#                 masked_voxel_betas = betas.T[mask_voxel_indices].T
-#                 masked_voxel_betas_test = betas_test.T[mask_voxel_indices].T
-
-#                 var_train_stat = fits_roi["var_train"].describe()
-#                 # Calculate the positive percentile
-#                 positive_percentile = find_positive_percentile(fits_roi["var_train"])
-
-#                 # Add the custom statistic to the results
-#                 if positive_percentile is not None:
-#                     var_train_stat["positive_percentile"] = positive_percentile
-#                 else:
-#                     var_train_stat["positive_percentile"] = "No positive values"
-
-#                 print(f"Stats for train set:\n{var_train_stat}")
-
-#                 var_test_stat = fits_roi["var_test"].describe()
-#                 # Calculate the positive percentile
-#                 positive_percentile = find_positive_percentile(fits_roi["var_test"])
-
-#                 # Add the custom statistic to the results
-#                 if positive_percentile is not None:
-#                     var_test_stat["positive_percentile"] = positive_percentile
-#                 else:
-#                     var_test_stat["positive_percentile"] = "No positive values"
-
-#                 print(f"Stats for test set:\n{var_test_stat}")
-
-#                 fits_roi.to_excel(gaussian_result_file_path, index=False)
-
-#                 print("-" * 30)
-
-
-def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take: str):
-    augment_shared_set = True
-    
     rois = config.analysis.rois_to_analyze
-
-    logging.info(f"Augmenting with shared set: {augment_shared_set} \nROIs: {rois}")
 
     columns = [
         "mds_hemi",
@@ -719,10 +599,15 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         "rescaled_slope",
         "rescaled_intercept",
         "original_index"
-    ]   
+    ]
 
     randomization = True
+    randomize_offset = 0
+
     augment_shared_set = True
+    logging.info(
+        f"Augmenting with shared set: {augment_shared_set}\n{augment_shared_set=}\nROIs: {rois}"
+    )
 
     for i, subj in enumerate(subj_list):
         gaussian_fit_result_dir_path = os.path.join(
@@ -730,40 +615,70 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
         )
         os.makedirs(gaussian_fit_result_dir_path, exist_ok=True)
 
-
-        mask, lh_size = retrieve_roi_mask_extended(config, subj, set_to_take, False, t_test_threshold=3.0)
+        # retrieve_roi_mask_extended
+        mask, lh_size = retrieve_roi_mask_extended(
+            config, subj, set_to_take, True, t_test_threshold=t_test_threshold
+        )
         # mask = retrieve_roi_mask(config, subj, set_to_take, False)
         betas, _, mds_mapping = retrieve_stacked_betas(
-            config, subj, "averaged", 0, subj_to_check=set_to_take, augment_shared_set=augment_shared_set, randomization=randomization
+            config,
+            subj,
+            "averaged",
+            0,
+            subj_to_check=set_to_take,
+            augment_shared_set=augment_shared_set,
+            randomization=randomization,
+            seed_offset=randomize_offset,
         )
 
         betas_test, _, _ = retrieve_stacked_betas(
-            config, subj, "averaged", 0, subj_to_check=set_to_take, test=True, augment_shared_set=augment_shared_set, randomization=randomization
+            config,
+            subj,
+            "averaged",
+            0,
+            subj_to_check=set_to_take,
+            test=True,
+            augment_shared_set=augment_shared_set,
+            randomization=randomization,
+            seed_offset=randomize_offset,
         )
-        # betas_test = retrieve_stacked_betas_test(
-        #     config, subj, subj_to_check=set_to_take, augment_shared_set=augment_shared_set
-        # )
+        
 
         if np.isnan(betas).any():
             raise ValueError("Found NaNs")
 
         logging.info(f"Starting fitting for subj{subj:02d}")
+        hemis = ["both", "lh", "rh"]
 
         for i, roi in enumerate(list(rois.keys())):
-            logging.info(f"Fitting for ROI {roi}")
+            if rois[roi] == 6 or rois[roi] == 9:
+                use_negative_slope = True
+            else:
+                use_negative_slope = False
+
+            logging.info(f"Fitting for ROI {roi} --> {use_negative_slope=}")
             roi_mask_value = rois[roi]
+
+            rdms, mdss = rdm_mds_from_betas(
+                config, betas, mask, lh_size, hemis, subj, roi_mask_value
+            )
 
             gaussian_result_file_path = os.path.join(
                 gaussian_fit_result_dir_path,
                 f"fitted_voxels_mask_{roi_mask_value}.xlsx",
             )
 
-            hemis = ["both", "lh", "rh"]
+            pcov_results_file = os.path.join(
+                gaussian_fit_result_dir_path,
+                f"pcov_{roi_mask_value}.pkl"
+            )
+
+            pcov_results = []
+
             mds_paths = []
 
             for hemi in hemis:
                 if randomization:
-                    randomize_offset = 0
                     mds_file = os.path.join(
                         config.directories.mds_dir,
                         set_to_take,
@@ -780,20 +695,7 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
 
                 mds_paths.append(mds_file)
 
-            existences = [os.path.exists(mds_file) for mds_file in mds_paths]
-            assert len(set(existences)) == 1, "Should have either no hemi of this ROI or all!"
-            if existences[0]:
-                pass
-            else:
-                print(f"Skipping ROI={roi} - not present")
-                continue
-
-            mds_both = np.load(mds_paths[0], allow_pickle=True).astype(np.float32).T
-            mds_lh =  np.load(mds_paths[1], allow_pickle=True).astype(np.float32).T
-            mds_rh = np.load(mds_paths[2], allow_pickle=True).astype(np.float32).T
-
-            mdss = [mds_both, mds_lh, mds_rh]
-
+            
 
             mask_voxel_indices = filter_roi_mask(roi_mask_value, mask)
             mask_voxel_indices = mask_voxel_indices[0]
@@ -805,30 +707,32 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 fits_roi = pd.read_excel(gaussian_result_file_path)
             else:
                 fits_roi = pd.DataFrame(columns=columns)
-                    # check voxel index for hemisphere belonging
+                # check voxel index for hemisphere belonging
 
-
-
-                for voxel_i in tqdm(mask_voxel_indices):
+                for iteration, voxel_i in enumerate(tqdm(mask_voxel_indices)):
                     if voxel_i < lh_size:
                         hemis_to_check = ["both", "lh"]
                     else:
                         hemis_to_check = ["both", "rh"]
-                    
+
                     for hemi in hemis_to_check:
-                        hemi_index = hemis.index(hemi)
+                        # hemi_index = hemis.index(hemi)
 
-                        mds = mdss[hemi_index]
+                        # need to transpose
+                        mds = mdss[hemi].T
+
                         x_samples, y_samples = (mds[0, :], mds[1, :])
-
-                        
 
                         voxel_activity = betas[:, voxel_i]
                         voxel_activity_test = betas_test[:, voxel_i]
 
-                        fitter = Gaussian2DFitter(use_polar=True)
+                        fitter = Gaussian2DFitter(
+                            use_polar=True,
+                            use_negative_slope=use_negative_slope,
+                            use_mixed_slope=use_mixed_slope,
+                        )
 
-                        popt, solved = fitter.fit(x_samples, y_samples, voxel_activity)
+                        popt, solved, pcov = fitter.fit(x_samples, y_samples, voxel_activity, voxel_activity_test)
 
                         A, x0, y0, sigma, intercept = popt
                         slope = A
@@ -854,12 +758,30 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                             voxel_i
                         ]
                         fits_roi.loc[len(fits_roi)] = voxel_fit
+                        pcov_results.append(
+                            {
+                                "hemi":hemi,
+                                "original_index" : voxel_i,
+                                "pcov" : pcov
+                            }
+                        )
                         # fits_roi.loc[voxel_i] = voxel_fit
 
-                # fits_roi["original_index"] = fits_roi.index
-                # fits_roi = fits_roi.reset_index(drop=True)
+
+                    if iteration % 200 == 0:
+                        fits_roi.to_excel(gaussian_result_file_path, index=False)
+
+                        # Save to file
+                        with open(pcov_results_file, "wb") as f:
+                            pickle.dump(pcov_results, f)
+
+
+                
                 fits_roi.to_excel(gaussian_result_file_path, index=False)
 
+                # Save to file
+                with open(pcov_results_file, "wb") as f:
+                    pickle.dump(pcov_results, f)
 
             # make sure all columns are actually present
             for col in columns:
@@ -867,14 +789,7 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 if col not in fits_roi.columns:
                     fits_roi[col] = np.nan
 
-            # for col in fits_roi.columns:
-            #     if col not in columns:
-            #         print(f"Column {col} is in dataframe but shouldn't be there...")
-            #         remove = input(f"Say 'Y' if column should be removed!")
-            #         if remove == "Y":
-            #             fits_roi.drop(columns=[col], inplace=True)
-
-
+           
             # Recalculate metrics for all voxels
             logging.info("Recalculating metrics for all voxels...")
             for index, row in tqdm(
@@ -882,13 +797,21 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
             ):
 
                 hemi = row["mds_hemi"]
-                hemi_index = hemis.index(hemi)
+                # hemi_index = hemis.index(hemi)
 
-                mds = mdss[hemi_index]            
+                # need to transpose
+                mds = mdss[hemi]
+
+                mds = mds.T
+
                 x_samples, y_samples = mds[0, :], mds[1, :]
 
                 voxel_i = row["original_index"]
-                fitter = Gaussian2DFitter(use_polar=False)
+                fitter = Gaussian2DFitter(
+                    use_polar=False,
+                    use_negative_slope=use_negative_slope,
+                    use_mixed_slope=use_mixed_slope,
+                )
                 fitter.mds = (x_samples, y_samples)
 
                 fitter.params = [
@@ -935,7 +858,6 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                     (x_samples, y_samples), voxel_test
                 )
 
-
                 # re-init to actual fit so that these params are used for offset rescaling
                 fitter.params = [
                     row["slope"],
@@ -944,8 +866,10 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                     row["sigma"],
                     row["intercept"],
                 ]
-                same_slope, same_x0, same_y0, same_sigma, new_intercept = fitter.offset_rescale_with_fit(voxel_test)
-                assert same_slope == row["slope"] and same_x0 == row["x0"] # ....
+                same_slope, same_x0, same_y0, same_sigma, new_intercept = (
+                    fitter.offset_rescale_with_fit(voxel_test)
+                )
+                assert same_slope == row["slope"] and same_x0 == row["x0"]  # ....
                 fitter.params = [
                     row["slope"],
                     row["x0"],
@@ -958,8 +882,6 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                     (x_samples, y_samples), voxel_test
                 )
 
-
-
                 model_perf = (
                     var_test_rescaled / noise_ceiling if noise_ceiling != 0 else 0.0
                 )
@@ -969,8 +891,9 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
                 fits_roi.at[index, "var_train"] = var_train
                 fits_roi.at[index, "var_test"] = var_test
                 fits_roi.at[index, "var_test_rescaled"] = var_test_rescaled
-                fits_roi.at[index, "var_test_rescaled_offset"] = var_test_rescaled_offset
-
+                fits_roi.at[index, "var_test_rescaled_offset"] = (
+                    var_test_rescaled_offset
+                )
 
                 fits_roi.at[index, "noise_ceiling"] = noise_ceiling
                 fits_roi.at[index, "model_performance"] = model_perf
@@ -1001,6 +924,4 @@ def fit_gaussian_params(config: Configuration, subj_list: list[int], set_to_take
             logging.info(f"Updated results saved to {gaussian_result_file_path}")
 
 
-if __name__ == "__main__":
-    config = load_config("config.yaml")
-    fit_gaussian_params(config, [1], "subj_01")
+

@@ -560,7 +560,7 @@ def extract_activations(subj: int,
     """
     # Read the list of image IDs from an Excel sheet
     faces_df = pd.read_excel(f"data/labels/subj_{subj:02d}/faces/faces_final.xlsx")
-    cocoIds = faces_df["cocoId"].tolist()
+    cocoIds = faces_df["cocoId"].tolist() + pd.read_excel(f"data/labels/shared/faces/faces_final.xlsx")["cocoId"].tolist()
 
     # Initialize models
     rft = RetinaFaceTorch(model_file=retina_path)
@@ -698,81 +698,106 @@ def _process_layer(module: str,
     computes X, RDM, MDS, runs Mantel tests for all feature selections, and
     puts the list of result‐dicts into `output_queue`.
     """
-    try:
-        feature_selections = ["centers", "sizes", "ages", "genders"]
+    # try:
+    feature_selections = ["centers", "sizes", "ages", "genders"]
 
-        # 1) Gather activations for this layer across images
-        features = []
-        valid_ids = []
-        for cocoId in cocoIds:
-            file_path = os.path.join(subj_dir, f"{cocoId:012d}.npz")
-            if not os.path.exists(file_path):
-                continue
-            data = np.load(file_path)
-            if layer not in data:
-                continue
-            feat = data[layer].squeeze().flatten()
-            features.append(feat)
-            valid_ids.append(cocoId)
+    # 1) Gather activations for this layer across images
+    features = []
+    valid_ids = []
+    for cocoId in cocoIds:
+        file_path = os.path.join(subj_dir, f"{cocoId:012d}.npz")
+        if not os.path.exists(file_path):
+            continue
+        data = np.load(file_path)
+        if layer not in data:
+            continue
+        feat = data[layer].squeeze().flatten()
+        features.append(feat)
+        valid_ids.append(cocoId)
 
-        results = []
-        if len(features) < 2:
-            # Nothing to do, return empty list
-            output_queue.put(results)
-            return
+    results = []
+    if len(features) < 2:
+        # Nothing to do, return empty list
+        output_queue.put(results)
+        return
 
-        # 2) Stack into a matrix: n_images × n_features
-        X = np.vstack(features)
+    # 2) Stack into a matrix: n_images × n_features
+    X = np.vstack(features)
 
-        bar.set_postfix_str(f"'{layer}': {X.shape}")
+    bar.set_postfix_str(f"'{layer}': {X.shape}")
 
-        # 3) Compute Representational Dissimilarity Matrix (RDM)
-        rdm = squareform(pdist(X, metric="correlation"))
-
-        # 4) Apply Multidimensional Scaling (MDS) once per layer
-        mds = MDS(n_components=2, dissimilarity="precomputed", random_state=42)
-        X_mds = mds.fit_transform(rdm)
+    # 3) Compute Representational Dissimilarity Matrix (RDM)
+    D_X = pdist(X, metric="correlation")
+    rdm = squareform(D_X)
 
 
-        # 5) For each feature_selection, run Mantel test using X_mds
-        for feature_selection in feature_selections:
-            mantel_out = run_mantel_test(
-                X_mds,
-                subj,
-                metadata,
-                B=B,
-                feature_selection=feature_selection
-            )
+
+    # 4) Apply Multidimensional Scaling (MDS) once per layer
+    mds = MDS(n_components=2, dissimilarity="precomputed", random_state=42)
+    X_mds = mds.fit_transform(rdm)
+
+
+
+    # 5) For each feature_selection, run Mantel test using X_mds
+    for feature_selection in feature_selections:
+        mantel_out = run_mantel_test(
+            D_X,
+            X_mds,
+            subj,
+            metadata,
+            B=B,
+            feature_selection=feature_selection
+        )
+#         return {
+#     "MDS": {
+#         "subject": subject_i,
+#         "r_obs": result_MDS["r_obs"],
+#         "p_value": result_MDS["p_value"],
+#         "feature": feature_selection,
+#     },
+#     "RDM": {
+#         "subject": subject_i,
+#         "r_obs": result_RDM["r_obs"],
+#         "p_value": result_RDM["p_value"],
+#         "feature": feature_selection,
+#     },
+# }
+
+        for distance_space in mantel_out:
             results.append({
-                "subject": mantel_out.get("subject", subj),
+                "subject": mantel_out[distance_space].get("subject", subj),
                 "module": module,
                 "layer": layer,
                 "n_images": len(valid_ids),
-                "r_obs": round(mantel_out["r_obs"], 3),
-                "p_value": round(mantel_out["p_value"], 3),
+                "r_obs": round(mantel_out[distance_space]["r_obs"], 3),
+                "p_value": round(mantel_out[distance_space]["p_value"], 3),
                 "shape":X.shape,
                 "B": B,
-                "feature_selection": feature_selection
+                "feature_selection": feature_selection,
+                "distance_space" : distance_space
             })
 
-        # 6) Return results for this layer
-        output_queue.put(results)
+    # 6) Return results for this layer
+    output_queue.put(results)
 
-    except Exception:
-        # If anything fails in the child, still put an empty list
-        results.append({
-            "subject": mantel_out.get("subject", subj),
-            "module": module,
-            "layer": layer,
-            "n_images": len(valid_ids),
-            "r_obs": np.nan,
-            "p_value": np.nan,
-            "shape":X.shape,
-            "B": B,
-            "feature_selection": feature_selection
-        })
-        output_queue.put(results)
-        raise  # so that the exitcode != 0 is evident to the parent
+    # except Exception as e:
+    #     print(e)
+    #     print(mantel_out)
+    #     # If anything fails in the child, still put an empty list
+    #     results.append({
+    #         "subject": mantel_out.get("subject", subj),
+    #         "module": module,
+    #         "layer": layer,
+    #         "n_images": len(valid_ids),
+    #         "r_obs": np.nan,
+    #         "p_value": np.nan,
+    #         "shape":X.shape,
+    #         "B": B,
+    #         "feature_selection": feature_selection,
+    #         "distance_space" : "ERROR"
+    #     })
+    #     output_queue.put(results)
+    #     raise  # so that the exitcode != 0 is evident to the parent
 
 def run_mantel_test_analysis(subj: int,
                              activations_dir: str,
@@ -813,7 +838,7 @@ def run_mantel_test_analysis(subj: int,
 
     # Load the list of image IDs from the corresponding Excel file
     faces_df = pd.read_excel(f"data/labels/subj_{subj:02d}/faces/faces_final.xlsx")
-    cocoIds = faces_df["cocoId"].tolist()
+    cocoIds = faces_df["cocoId"].tolist() + pd.read_excel(f"data/labels/shared/faces/faces_final.xlsx")["cocoId"].tolist()
 
     for module in modules:
         print(f"=== Processing module: {module} ===")
@@ -841,7 +866,6 @@ def run_mantel_test_analysis(subj: int,
         #         'conv_14_t0_relu', 'conv_13_dw_t1_relu', 'conv_13_t1_relu', 'conv_14_dw_t1_relu'
         #     ]
 
-        print(f"Found {len(all_layers)} layers: {sorted(all_layers)}")
 
         feature_selections = ["centers", "sizes", "ages", "genders"]
 
@@ -851,9 +875,13 @@ def run_mantel_test_analysis(subj: int,
 
         if module == "detection":
             sorted_layers = sorted(all_layers, key=_numeric_key_detection)
+            print(f"Found {len(sorted_layers)} layers: {sorted_layers}")
+
             
         else:
             sorted_layers = sorted(all_layers, key=_numeric_key_genderage)
+            print(f"Found {len(sorted_layers)} layers: {sorted_layers}")
+
 
         bar = tqdm(range(len(all_layers)), desc=f"{module} layers")
         for i in bar:
@@ -890,64 +918,6 @@ def run_mantel_test_analysis(subj: int,
 
         print()  # blank line between modules
             
-            # 1) Gather activations for this layer across images
-        #     features = []
-        #     valid_ids = []
-        #     for cocoId in cocoIds:
-        #         file_path = os.path.join(subj_dir, f"{cocoId:012d}.npz")
-        #         if not os.path.exists(file_path):
-        #             continue
-        #         data = np.load(file_path)
-        #         if layer not in data:
-        #             continue
-        #         feat = data[layer].squeeze().flatten()
-        #         features.append(feat)
-        #         valid_ids.append(cocoId)
-
-        #     if len(features) < 2:
-        #         print(f"  [layer={layer}] only {len(features)} valid items → skipping")
-        #         continue
-
-        #     # 2) Stack into a matrix: n_images × n_features
-        #     X = np.vstack(features)
-        #     bar.set_postfix_str(f"'{layer}': {X.shape}")
-        #     # print(f"  Dimensionality of feature matrix for layer '{layer}': {X.shape}")
-
-        #     # 3) Compute Representational Dissimilarity Matrix (RDM) using correlation distance
-        #     rdm = squareform(pdist(X, metric="correlation"))
-
-        #     # 4) Apply Multidimensional Scaling (MDS) once per layer
-        #     mds = MDS(n_components=2, dissimilarity="precomputed", random_state=42)
-        #     X_mds = mds.fit_transform(rdm)
-
-        #     # 5) For each feature_selection, run Mantel test using the same X_mds
-        #     for feature_selection in feature_selections:
-        #         mantel_out = run_mantel_test(
-        #             X_mds,
-        #             subj,
-        #             metadata,
-        #             B=B,
-        #             feature_selection=feature_selection
-        #         )
-        #         # Expect mantel_out to contain keys: 'subject', 'r_obs', 'effect_size', 'p_value'
-
-        #         # 6) Record results
-        #         results.append({
-        #             "subject": mantel_out.get("subject", subj),
-        #             "module": module,
-        #             "layer": layer,
-        #             "n_images": len(valid_ids),
-        #             "r_obs": round(mantel_out["r_obs"], 3),
-        #             "p_value": round(mantel_out["p_value"], 3),
-        #             "B": B,
-        #             "feature_selection": feature_selection
-        #         })
-
-        #     # 7) After finishing this layer (all its features), save intermediate results to Excel
-        #     df_partial = pd.DataFrame(results)
-        #     df_partial.to_excel(output_excel, index=False)
-
-        # print()  # Blank line between modules
 
     # 8) Once all modules/layers processed, print final results
     df_results = pd.DataFrame(results)
@@ -1001,13 +971,16 @@ def main():
     print("\n=== Visualizing Model Graph ===")
     retina_model = RetinaFaceTorch(model_file=retina_model_path)
     age_model = AgeGenderModel(model_path=age_gender_model_path)
-    visualize_model_graph(retina_model, age_model)
+    # visualize_model_graph(retina_model, age_model)
 
     # 4) Run Mantel test analysis on saved activations
     print("\n=== Running Mantel Test Analysis ===")
     # Build metadata list of string IDs for Mantel test (must match order of images)
     faces_df = pd.read_excel(f"data/labels/subj_{subj:02d}/faces/faces_final.xlsx")
-    cocoIds = faces_df["cocoId"].tolist()
+    face_df_shared = pd.read_excel(f"data/labels/shared/faces/faces_final.xlsx")
+    
+    
+    cocoIds = faces_df["cocoId"].tolist() + face_df_shared["cocoId"].tolist()
     metadata = [f"{x:012d}" for x in cocoIds]
 
     run_mantel_test_analysis(
@@ -1015,7 +988,7 @@ def main():
         activations_dir=activations_dir,
         output_excel=mantel_output_excel,
         metadata=metadata,
-        modules=["genderage"],  # Change to ["detection", "genderage"] if needed
+        modules=["detection", "genderage"],  # Change to ["detection", "genderage"] if needed
         B=2000
     )
 
