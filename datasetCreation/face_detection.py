@@ -115,14 +115,11 @@ def generate_face_detection_results(config: Configuration):
                     kps = face.kps.astype(float).tolist()
                     landmarks = face.landmark_2d_106.astype(float).tolist()
 
-                    
                     gender = int(face.gender)
                     age = face.age
 
-
                     assert isinstance(gender, int)
                     assert isinstance(age, int)
-
 
                     detections.append(bbox)
                     kps_iter.append(kps)

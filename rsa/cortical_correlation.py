@@ -30,7 +30,9 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.sparse.csgraph import dijkstra
 from nibabel import freesurfer
 from tqdm import tqdm
-from sklearn_extra.cluster import KMedoids  # sklearn ≥1.2; otherwise use sklearn_extra.cluster.KMedoids
+from sklearn_extra.cluster import (
+    KMedoids,
+)  # sklearn ≥1.2; otherwise use sklearn_extra.cluster.KMedoids
 
 # Local imports
 from utils.config import load_config, Configuration
@@ -47,14 +49,15 @@ logging.basicConfig(
 # DISTANCE CALCULATION UTILITIES
 # =========================================================================
 
+
 def bhattacharyya_distance(mu1, S1, mu2, S2):
     """
     Compute Bhattacharyya distance between two Gaussians N(mu1, S1) and N(mu2, S2).
-    
+
     Args:
         mu1, mu2: Mean vectors of the two Gaussians
         S1, S2: Covariance matrices of the two Gaussians
-        
+
     Returns:
         float: Bhattacharyya distance
     """
@@ -64,8 +67,7 @@ def bhattacharyya_distance(mu1, S1, mu2, S2):
 
     term1 = 0.125 * diff.T @ inv_Savg @ diff
     term2 = 0.5 * np.log(
-        np.linalg.det(S_avg) /
-        np.sqrt(np.linalg.det(S1) * np.linalg.det(S2))
+        np.linalg.det(S_avg) / np.sqrt(np.linalg.det(S1) * np.linalg.det(S2))
     )
     return term1 + term2
 
@@ -73,11 +75,11 @@ def bhattacharyya_distance(mu1, S1, mu2, S2):
 def build_mesh_graph(vertices: np.ndarray, faces: np.ndarray) -> sp.csr_matrix:
     """
     Build CSR adjacency matrix weighted by Euclidean length of edges.
-    
+
     Args:
         vertices: Mesh vertices array
         faces: Mesh faces array
-        
+
     Returns:
         sp.csr_matrix: Sparse adjacency matrix with edge weights
     """
@@ -93,17 +95,18 @@ def build_mesh_graph(vertices: np.ndarray, faces: np.ndarray) -> sp.csr_matrix:
 # MDS DISTANCE COMPUTATION
 # =========================================================================
 
+
 def compute_mds_distances(
     config: Configuration,
     subjects: list[int],
     t_test_threshold: float,
     rois: list[int] = list(range(1, 10)),
-    sigma_threshold: float = 5
+    sigma_threshold: float = 5,
 ) -> None:
     """
     Compute Euclidean MDS distances and Bhattacharyya distances
     between fitted 2D Gaussians (normalized, ignoring amp & offset).
-    
+
     Args:
         config: Configuration object containing directory paths
         subjects: List of subject IDs to process
@@ -111,16 +114,20 @@ def compute_mds_distances(
         rois: List of ROI indices to process
         sigma_threshold: Threshold for filtering Gaussian fits by sigma value
     """
-    for sub in tqdm(subjects, desc=f"Computing MDS distances ({config.directories.gaussian_fit_results_dir})"):
+    for sub in tqdm(
+        subjects,
+        desc=f"Computing MDS distances ({config.directories.gaussian_fit_results_dir})",
+    ):
         subj_str = f"subj_{sub:02d}"
         fits_base = os.path.join(
-            config.directories.gaussian_fit_results_dir,
-            subj_str, f"subj{sub:02d}"
+            config.directories.gaussian_fit_results_dir, subj_str, f"subj{sub:02d}"
         )
         mask_dir = os.path.join(config.directories.t_test_roi_dir, subj_str)
-        
+
         # Retrieve ROI mask for this subject
-        mask, n_lh = retrieve_roi_mask_extended(config, sub, f"subj_{sub:02d}", True, t_test_threshold=t_test_threshold)
+        mask, n_lh = retrieve_roi_mask_extended(
+            config, sub, f"subj_{sub:02d}", True, t_test_threshold=t_test_threshold
+        )
         mask_lh = mask[:n_lh]
         mask_rh = mask[n_lh:]
         mask_roi_values = np.unique(mask)
@@ -130,15 +137,13 @@ def compute_mds_distances(
                 continue
 
             # Load fitted Gaussian parameters for this ROI
-            fits_file = os.path.join(
-                fits_base, f"fitted_voxels_mask_{roi}.xlsx"
-            )
+            fits_file = os.path.join(fits_base, f"fitted_voxels_mask_{roi}.xlsx")
             if not os.path.isfile(fits_file):
                 logging.info(f"[MDS] subj{sub:02d}: ROI {roi} fits missing → skip")
                 continue
 
             df = pd.read_excel(fits_file)
-            
+
             # Validate required columns for 2D Gaussian fitting
             needed = {"original_index", "x0", "y0"}
             if not (needed <= set(df.columns)):
@@ -156,8 +161,7 @@ def compute_mds_distances(
 
             # Create output directory
             out_subdir = os.path.join(
-                config.directories.distances_dir,
-                "mds_distances", subj_str
+                config.directories.distances_dir, "mds_distances", subj_str
             )
             os.makedirs(out_subdir, exist_ok=True)
 
@@ -170,22 +174,24 @@ def compute_mds_distances(
                 S = np.eye(2) * (s * s)  # isotropic covariance
                 mus.append(mu)
                 Sigmas.append(S)
-            
-            mus = np.stack(mus, axis=0)      # shape (N_all, 2)
-            Sigmas = np.stack(Sigmas, axis=0) # shape (N_all, 2, 2)
+
+            mus = np.stack(mus, axis=0)  # shape (N_all, 2)
+            Sigmas = np.stack(Sigmas, axis=0)  # shape (N_all, 2, 2)
 
             # Process each hemisphere separately
             for hemi in ("lh", "rh"):
                 mask = hemis == hemi
                 if mask.sum() < 2:
-                    logging.info(f"[MDS] subj{sub:02d} ROI {roi} {hemi}: <2 voxels → skip")
+                    logging.info(
+                        f"[MDS] subj{sub:02d} ROI {roi} {hemi}: <2 voxels → skip"
+                    )
                     continue
 
                 # Select data for this hemisphere
                 sel_idx = idx_all[mask]
                 sel_coords = coords[mask]
-                sel_mus = mus[mask]       # shape (N, 2)
-                sel_S = Sigmas[mask]      # shape (N, 2, 2)
+                sel_mus = mus[mask]  # shape (N, 2)
+                sel_S = Sigmas[mask]  # shape (N, 2, 2)
                 N = sel_coords.shape[0]
 
                 # 1) Euclidean MDS distance (unchanged)
@@ -193,20 +199,20 @@ def compute_mds_distances(
                 np.savez_compressed(
                     os.path.join(out_subdir, f"{hemi}.dists.roi_{roi}.npz"),
                     distances=D,
-                    indices=sel_idx
+                    indices=sel_idx,
                 )
 
                 # 2) Bhattacharyya distance on isotropic Gaussians — vectorized version
                 # Extract the scalar sigmas from the isotropic covariance matrices
-                sigma2 = sel_S[:, 0, 0]       # σ_i^2 for each voxel
-                sigmas = np.sqrt(sigma2)      # σ_i
+                sigma2 = sel_S[:, 0, 0]  # σ_i^2 for each voxel
+                sigmas = np.sqrt(sigma2)  # σ_i
 
                 # (a) pairwise squared Euclidean distance between means
-                d2 = squareform(pdist(sel_mus, metric="sqeuclidean"))   # shape (N, N)
+                d2 = squareform(pdist(sel_mus, metric="sqeuclidean"))  # shape (N, N)
 
                 # (b) build σ²-sum and σ-product matrices
-                S_sum = sigma2[:, None] + sigma2[None, :]               # shape (N, N)
-                S_prod = sigmas[:, None] * sigmas[None, :]              # shape (N, N)
+                S_sum = sigma2[:, None] + sigma2[None, :]  # shape (N, N)
+                S_prod = sigmas[:, None] * sigmas[None, :]  # shape (N, N)
 
                 # (c) apply the closed-form Bhattacharyya distance for isotropic Gaussians
                 B = d2 / (4.0 * S_sum) + np.log(S_sum / (2.0 * S_prod))
@@ -218,7 +224,7 @@ def compute_mds_distances(
                 np.savez_compressed(
                     os.path.join(out_subdir, f"{hemi}.bhatt.roi_{roi}.npz"),
                     distances=B.astype(np.float32),
-                    indices=sel_idx
+                    indices=sel_idx,
                 )
 
                 logging.info(
@@ -233,6 +239,7 @@ def compute_mds_distances(
 # CORTICAL DISTANCE COMPUTATION
 # =========================================================================
 
+
 def compute_cortical_distances(
     config: Configuration,
     subjects: list[int],
@@ -242,7 +249,7 @@ def compute_cortical_distances(
     Equivalent of the MATLAB meshes_and_distances.m (GIBBON‐based Dijkstra) in Python.
     For each subject and each hemisphere and each ROI,
     compute geodesic distances among ROI vertices via SciPy's Dijkstra.
-    
+
     Args:
         config: Configuration object containing directory paths
         subjects: List of subject IDs to process
@@ -253,7 +260,7 @@ def compute_cortical_distances(
 
     for sub in subjects:
         subj_dir = f"subj_{sub:02d}"
-        
+
         for hemi in hemis:
             # Get left hemisphere size for right hemisphere offset calculation
             if hemi == "rh":
@@ -306,7 +313,7 @@ def compute_cortical_distances(
                 out_file = os.path.join(
                     distances_dir, f"{hemi}.dists.roi_{roi_label}.npz"
                 )
-                
+
                 # Skip if already computed
                 if os.path.exists(out_file):
                     logging.info(
@@ -318,15 +325,17 @@ def compute_cortical_distances(
                 mask = np.isin(hhroivals, roi_label)
                 roi_indices = np.flatnonzero(mask)
                 k = len(roi_indices)
-                
+
                 if k == 0:
-                    logging.info(f"{subj_dir}:{hemi}.roi_{roi_label} → no vertices, skipping.")
+                    logging.info(
+                        f"{subj_dir}:{hemi}.roi_{roi_label} → no vertices, skipping."
+                    )
                     continue
 
                 logging.info(
                     f"Computing distances for {subj_dir}:{hemi}.roi_{roi_label} (k={k}) …"
                 )
-                
+
                 # Compute all-pairs shortest paths for ROI vertices
                 d_roi = np.zeros((k, k), dtype=np.float32)
                 for i, src in enumerate(
@@ -341,7 +350,7 @@ def compute_cortical_distances(
                 # Adjust indices for right hemisphere (add left hemisphere size)
                 if hemi == "rh":
                     roi_indices += n_lh
-                    
+
                 # Save distance matrix and indices
                 np.savez_compressed(out_file, distances=d_roi, indices=roi_indices)
                 logging.info(f"   → saved {k}×{k} to {out_file}")
@@ -353,6 +362,7 @@ def compute_cortical_distances(
 # CORRELATION ANALYSIS
 # =========================================================================
 
+
 def spearman_trials(
     a: np.ndarray,
     b: np.ndarray,
@@ -363,14 +373,14 @@ def spearman_trials(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute Spearman rho & p‐value for each trial.
-    
+
     Args:
         a, b: Input arrays for correlation
         fraction: Fraction of data to use per trial (for bootstrapping)
         trials: Number of trials to run
         shuffle: If True, shuffle `a` each trial to build a null distribution
         seed: Random seed for reproducibility
-        
+
     Returns:
         tuple: (rhos, pvals) arrays of shape (trials,)
     """
@@ -416,11 +426,11 @@ def compute_correlations(
     downsample_frac: float = 1.0 / (1.8**3),
     trials: int = 1000,
     n_seeds: int = 5,  # Currently unused
-    k_nn: int = 100,   # Currently unused
+    k_nn: int = 100,  # Currently unused
 ) -> None:
     """
     Compute & save trial‐level Spearman correlations for full/bootstrap/null conditions.
-    
+
     Args:
         config: Configuration object containing directory paths
         subjects: List of subject IDs to process
@@ -449,28 +459,44 @@ def compute_correlations(
     # Process each subject/hemisphere/ROI combination
     for sub in tqdm(subjects, desc="Subjects"):
         sub_str = f"subj_{sub:02d}"
-        
+
         for hemi in hemis:
             for roi in tqdm(rois, desc=f"ROIS – hemi={hemi}"):
                 # Define file paths for distance matrices
-                mds_euc_f = os.path.join(mds_base, sub_str, f"{hemi}.dists.roi_{roi}.npz")
-                mds_bhatt_f = os.path.join(mds_base, sub_str, f"{hemi}.bhatt.roi_{roi}.npz")
+                mds_euc_f = os.path.join(
+                    mds_base, sub_str, f"{hemi}.dists.roi_{roi}.npz"
+                )
+                mds_bhatt_f = os.path.join(
+                    mds_base, sub_str, f"{hemi}.bhatt.roi_{roi}.npz"
+                )
                 cort_f = os.path.join(cort_base, sub_str, f"{hemi}.dists.roi_{roi}.npz")
 
                 # Skip if any required files are missing
-                if not os.path.isfile(mds_euc_f) or not os.path.isfile(mds_bhatt_f) or not os.path.isfile(cort_f):
+                if (
+                    not os.path.isfile(mds_euc_f)
+                    or not os.path.isfile(mds_bhatt_f)
+                    or not os.path.isfile(cort_f)
+                ):
                     continue
 
                 # Load distance matrices and indices
                 md_euc = np.load(mds_euc_f)
                 md_bhatt = np.load(mds_bhatt_f)
                 cd = np.load(cort_f)
-                
-                ids_m, ids_m_bhatt, ids_c = md_euc["indices"], md_bhatt["indices"], cd["indices"]
-                Dm, Dm_bhatt, Dc = md_euc["distances"], md_bhatt["distances"], cd["distances"]
+
+                ids_m, ids_m_bhatt, ids_c = (
+                    md_euc["indices"],
+                    md_bhatt["indices"],
+                    cd["indices"],
+                )
+                Dm, Dm_bhatt, Dc = (
+                    md_euc["distances"],
+                    md_bhatt["distances"],
+                    cd["distances"],
+                )
 
                 # Find overlapping indices between MDS and cortical distances
-                mask_m = np.isin(ids_m, ids_c)          # Euclidean MDS mask
+                mask_m = np.isin(ids_m, ids_c)  # Euclidean MDS mask
                 mask_m_bhatt = np.isin(ids_m_bhatt, ids_c)  # Bhattacharyya MDS mask
 
                 # Validate sufficient overlap
@@ -479,7 +505,9 @@ def compute_correlations(
                 elif mask_m.sum() >= 2 and mask_m_bhatt.sum() >= 2:
                     pass
                 else:
-                    raise Exception(f"[CORR] subj{sub:02d}: ROI {roi} bad indices → skip")
+                    raise Exception(
+                        f"[CORR] subj{sub:02d}: ROI {roi} bad indices → skip"
+                    )
 
                 # Create index mappings for cortical distances
                 ic = {int(v): i for i, v in enumerate(ids_c)}
@@ -496,7 +524,10 @@ def compute_correlations(
                 triu = np.triu_indices(Dm2.shape[0], k=1)
                 triu_bhatt = np.triu_indices(Dm2_bhatt.shape[0], k=1)
                 a_flat, b_flat = Dm2[triu], Dc2[triu]
-                a_flat_bhatt, b_flat_bhatt = Dm2_bhatt[triu_bhatt], Dc2_bhatt[triu_bhatt]
+                a_flat_bhatt, b_flat_bhatt = (
+                    Dm2_bhatt[triu_bhatt],
+                    Dc2_bhatt[triu_bhatt],
+                )
 
                 n_pairs = a_flat.size
 
@@ -505,108 +536,145 @@ def compute_correlations(
                     a_flat, b_flat, fraction=1.0, trials=1, shuffle=False, seed=0
                 )
                 rhos_bhatt, pvals_bhatt = spearman_trials(
-                    a_flat_bhatt, b_flat_bhatt, fraction=1.0, trials=1, shuffle=False, seed=0
+                    a_flat_bhatt,
+                    b_flat_bhatt,
+                    fraction=1.0,
+                    trials=1,
+                    shuffle=False,
+                    seed=0,
                 )
 
                 # Store Euclidean results
                 for t, (rho, p) in enumerate(zip(rhos, pvals)):
-                    long_rows.append({
-                        "subject": sub_str,
-                        "hemisphere": hemi,
-                        "roi": roi,
-                        "method": "full",
-                        "trial": t,
-                        "n_pairs": n_pairs,
-                        "rho": rho,
-                        "pval": p,
-                        "distance_metric": "euclidean",
-                    })
+                    long_rows.append(
+                        {
+                            "subject": sub_str,
+                            "hemisphere": hemi,
+                            "roi": roi,
+                            "method": "full",
+                            "trial": t,
+                            "n_pairs": n_pairs,
+                            "rho": rho,
+                            "pval": p,
+                            "distance_metric": "euclidean",
+                        }
+                    )
 
                 # Store Bhattacharyya results
                 for t, (rho, p) in enumerate(zip(rhos_bhatt, pvals_bhatt)):
-                    long_rows.append({
-                        "subject": sub_str,
-                        "hemisphere": hemi,
-                        "roi": roi,
-                        "method": "full",
-                        "trial": t,
-                        "n_pairs": n_pairs,
-                        "rho": rho,
-                        "pval": p,
-                        "distance_metric": "bhattacharyya",
-                    })
+                    long_rows.append(
+                        {
+                            "subject": sub_str,
+                            "hemisphere": hemi,
+                            "roi": roi,
+                            "method": "full",
+                            "trial": t,
+                            "n_pairs": n_pairs,
+                            "rho": rho,
+                            "pval": p,
+                            "distance_metric": "bhattacharyya",
+                        }
+                    )
 
                 # === BOOTSTRAP DOWNSAMPLE ===
                 rhos, pvals = spearman_trials(
-                    a_flat, b_flat, fraction=downsample_frac, trials=trials, shuffle=False, seed=0
+                    a_flat,
+                    b_flat,
+                    fraction=downsample_frac,
+                    trials=trials,
+                    shuffle=False,
+                    seed=0,
                 )
                 rhos_bhatt, pvals_bhatt = spearman_trials(
-                    a_flat_bhatt, b_flat_bhatt, fraction=downsample_frac, trials=trials, shuffle=False, seed=0
+                    a_flat_bhatt,
+                    b_flat_bhatt,
+                    fraction=downsample_frac,
+                    trials=trials,
+                    shuffle=False,
+                    seed=0,
                 )
 
                 # Store Euclidean bootstrap results
                 for t, (rho, p) in enumerate(zip(rhos, pvals)):
-                    long_rows.append({
-                        "subject": sub_str,
-                        "hemisphere": hemi,
-                        "roi": roi,
-                        "method": "bootstrap",
-                        "trial": t,
-                        "n_pairs": round(n_pairs * downsample_frac),
-                        "rho": rho,
-                        "pval": p,
-                        "distance_metric": "euclidean",
-                    })
+                    long_rows.append(
+                        {
+                            "subject": sub_str,
+                            "hemisphere": hemi,
+                            "roi": roi,
+                            "method": "bootstrap",
+                            "trial": t,
+                            "n_pairs": round(n_pairs * downsample_frac),
+                            "rho": rho,
+                            "pval": p,
+                            "distance_metric": "euclidean",
+                        }
+                    )
 
                 # Store Bhattacharyya bootstrap results
                 for t, (rho, p) in enumerate(zip(rhos_bhatt, pvals_bhatt)):
-                    long_rows.append({
-                        "subject": sub_str,
-                        "hemisphere": hemi,
-                        "roi": roi,
-                        "method": "bootstrap",
-                        "trial": t,
-                        "n_pairs": round(n_pairs * downsample_frac),
-                        "rho": rho,
-                        "pval": p,
-                        "distance_metric": "bhattacharyya",
-                    })
+                    long_rows.append(
+                        {
+                            "subject": sub_str,
+                            "hemisphere": hemi,
+                            "roi": roi,
+                            "method": "bootstrap",
+                            "trial": t,
+                            "n_pairs": round(n_pairs * downsample_frac),
+                            "rho": rho,
+                            "pval": p,
+                            "distance_metric": "bhattacharyya",
+                        }
+                    )
 
                 # === NULL DISTRIBUTION (bootstrap + shuffle) ===
                 rhos, pvals = spearman_trials(
-                    a_flat, b_flat, fraction=downsample_frac, trials=trials, shuffle=True, seed=0
+                    a_flat,
+                    b_flat,
+                    fraction=downsample_frac,
+                    trials=trials,
+                    shuffle=True,
+                    seed=0,
                 )
                 rhos_bhatt, pvals_bhatt = spearman_trials(
-                    a_flat_bhatt, b_flat_bhatt, fraction=downsample_frac, trials=trials, shuffle=True, seed=0
+                    a_flat_bhatt,
+                    b_flat_bhatt,
+                    fraction=downsample_frac,
+                    trials=trials,
+                    shuffle=True,
+                    seed=0,
                 )
 
                 # Store Euclidean null results
                 for t, (rho, p) in enumerate(zip(rhos, pvals)):
-                    long_rows.append({
-                        "subject": sub_str,
-                        "hemisphere": hemi,
-                        "roi": roi,
-                        "method": "null",
-                        "trial": t,
-                        "n_pairs": round(n_pairs * downsample_frac),
-                        "rho": rho,
-                        "pval": p,
-                        "distance_metric": "euclidean",
-                    })
+                    long_rows.append(
+                        {
+                            "subject": sub_str,
+                            "hemisphere": hemi,
+                            "roi": roi,
+                            "method": "null",
+                            "trial": t,
+                            "n_pairs": round(n_pairs * downsample_frac),
+                            "rho": rho,
+                            "pval": p,
+                            "distance_metric": "euclidean",
+                        }
+                    )
 
                 # Store Bhattacharyya null results
                 for t, (rho, p) in enumerate(zip(rhos_bhatt, pvals_bhatt)):
-                    long_rows.append({
-                        "subject": sub_str,
-                        "hemisphere": hemi,
-                        "roi": roi,
-                        "method": "null",
-                        "trial": t,
-                        "n_pairs": round(n_pairs * downsample_frac),
-                        "rho": rho,
-                        "pval": p,
-                        "distance_metric": "bhattacharyya",
-                    })
+                    long_rows.append(
+                        {
+                            "subject": sub_str,
+                            "hemisphere": hemi,
+                            "roi": roi,
+                            "method": "null",
+                            "trial": t,
+                            "n_pairs": round(n_pairs * downsample_frac),
+                            "rho": rho,
+                            "pval": p,
+                            "distance_metric": "bhattacharyya",
+                        }
+                    )
 
                 # Save incrementally after each ROI (pickle is fast)
                 pd.DataFrame(long_rows).to_pickle(out_long_pkl)
@@ -619,6 +687,7 @@ def compute_correlations(
 # =========================================================================
 # MAIN EXECUTION
 # =========================================================================
+
 
 def main():
     """Main function to run all distance analysis steps."""

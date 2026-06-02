@@ -1,7 +1,7 @@
 """
 Permutation Analysis Module
 
-This module implements Mantel tests for analyzing the relationship between 
+This module implements Mantel tests for analyzing the relationship between
 neural representations and various facial features (centers, sizes, ages, genders).
 The analysis includes both RDM-based and MDS-based comparisons using permutation testing.
 """
@@ -34,32 +34,32 @@ logging.basicConfig(
 # CORE MANTEL TEST FUNCTIONS
 # =========================================================================
 
+
 def mantel_test_feature(
-    X: np.ndarray, 
-    feature: np.ndarray, 
-    B: int = 2000, 
-    metric: str = "euclidean"
+    X: np.ndarray, feature: np.ndarray, B: int = 2000, metric: str = "euclidean"
 ) -> dict:
     """
     Perform Mantel test between feature space X and a specific feature vector.
-    
+
     This function computes the correlation between distance matrices derived from
     the feature space X and the feature vector, then tests significance using
     permutation testing.
-    
+
     Args:
         X: Feature matrix of shape (n_samples, n_features)
         feature: Feature vector of shape (n_samples,) or (n_samples, n_features)
         B: Number of bootstrap/permutation iterations for significance testing
         metric: Distance metric to use (default: "euclidean")
-        
+
     Returns:
         dict: Results containing observed correlation, p-value, and permutation correlations
     """
     X = np.asarray(X)
     feature = np.asarray(feature)
 
-    assert X.shape[0] == feature.shape[0], "X and feature must have same number of samples"
+    assert (
+        X.shape[0] == feature.shape[0]
+    ), "X and feature must have same number of samples"
 
     # Ensure feature is 2D
     if feature.ndim == 1:
@@ -96,29 +96,26 @@ def mantel_test_feature(
 
 
 def mantel_test_feature_rdm(
-    D_X: np.ndarray, 
-    feature: np.ndarray, 
-    B: int = 2000, 
-    metric: str = "euclidean"
+    D_X: np.ndarray, feature: np.ndarray, B: int = 2000, metric: str = "euclidean"
 ) -> dict:
     """
     Perform Mantel test using a precomputed distance matrix (RDM) and feature vector.
-    
+
     This function is similar to mantel_test_feature but takes a precomputed
     distance matrix as input instead of computing it from features.
-    
+
     Args:
         D_X: Precomputed distance matrix (condensed format from pdist)
-        feature: Feature vector of shape (n_samples,) or (n_samples, n_features)  
+        feature: Feature vector of shape (n_samples,) or (n_samples, n_features)
         B: Number of bootstrap/permutation iterations for significance testing
         metric: Distance metric to use for feature distances (default: "euclidean")
-        
+
     Returns:
         dict: Results containing observed correlation, p-value, and permutation correlations
     """
     feature = np.asarray(feature)
     D_X = squareform(D_X)  # Convert to square matrix format
-    
+
     assert (
         D_X.shape[0] == feature.shape[0] and D_X.shape[1] == D_X.shape[0]
     ), "D_X and feature must have compatible dimensions; D_X should be square"
@@ -160,14 +157,15 @@ def mantel_test_feature_rdm(
 # FEATURE EXTRACTION AND PROCESSING
 # =========================================================================
 
+
 def extract_facial_features(metadata: list, subject_i: int) -> dict:
     """
     Extract facial features from detection results for a given subject.
-    
+
     Args:
         metadata: List of image identifiers
         subject_i: Subject ID
-        
+
     Returns:
         dict: Dictionary containing extracted features (centers, sizes, ages, genders, eye_coordinates)
     """
@@ -200,15 +198,19 @@ def extract_facial_features(metadata: list, subject_i: int) -> dict:
     for entry in metadata:
         # Find matching detection record
         matches = [x for x in filtered if x["cocoId"] == entry]
-        assert len(matches) == 1, f"Expected exactly one match for {entry}, got {len(matches)}"
+        assert (
+            len(matches) == 1
+        ), f"Expected exactly one match for {entry}, got {len(matches)}"
         match = matches[0]
-        assert len(match["detection"]) == 1, "Expected exactly one bounding box per image"
+        assert (
+            len(match["detection"]) == 1
+        ), "Expected exactly one bounding box per image"
 
         # Extract bounding box center and size
         x1, y1, x2, y2 = match["detection"][0]
         center = np.array([(x1 + x2) / 2, (y1 + y2) / 2])
         centers.append(center)
-        
+
         width = x2 - x1
         height = y2 - y1
         sizes.append(np.array([width, height]))
@@ -228,21 +230,21 @@ def extract_facial_features(metadata: list, subject_i: int) -> dict:
         "sizes": np.array(sizes),
         "eye_coordinates": np.array(eye_coordinates),
         "ages": np.array(feature_array_age),
-        "genders": np.array(genders)
+        "genders": np.array(genders),
     }
 
 
 def run_mantel_test(
     D_X: np.ndarray,
-    X: np.ndarray, 
-    subject_i: int, 
-    metadata: list, 
-    B: int = 2000, 
-    feature_selection: str = "centers"
+    X: np.ndarray,
+    subject_i: int,
+    metadata: list,
+    B: int = 2000,
+    feature_selection: str = "centers",
 ) -> dict:
     """
     Run Mantel test for a specific feature selection on given data.
-    
+
     Args:
         D_X: Precomputed distance matrix (condensed format)
         X: Feature matrix for MDS-based analysis
@@ -250,15 +252,17 @@ def run_mantel_test(
         metadata: List of image identifiers
         B: Number of permutation iterations
         feature_selection: Feature type to analyze ("centers", "sizes", "ages", "genders", "eye")
-        
+
     Returns:
         dict: Results for both RDM and MDS analyses
     """
-    logging.info(f"Running Mantel test for subject {subject_i}, feature: {feature_selection}")
-    
+    logging.info(
+        f"Running Mantel test for subject {subject_i}, feature: {feature_selection}"
+    )
+
     # Extract all facial features
     features_dict = extract_facial_features(metadata, subject_i)
-    
+
     # Select the specified feature
     if feature_selection == "eye":
         features = features_dict["eye_coordinates"]
@@ -289,18 +293,19 @@ def run_mantel_test(
 # HIGHER-LEVEL ANALYSIS FUNCTIONS
 # =========================================================================
 
+
 def run_mantel_test_for_subject_mask(
-    subject_i: int, 
-    mask: int, 
-    set_to_take_rsa: str, 
-    t_test_threshold: float, 
-    B: int = 2000, 
-    feature_selection: str = "centers", 
-    config=None
+    subject_i: int,
+    mask: int,
+    set_to_take_rsa: str,
+    t_test_threshold: float,
+    B: int = 2000,
+    feature_selection: str = "centers",
+    config=None,
 ) -> list:
     """
     Load data and run Mantel test for a specific subject and ROI mask.
-    
+
     Args:
         subject_i: Subject ID
         mask: ROI mask value
@@ -309,15 +314,24 @@ def run_mantel_test_for_subject_mask(
         B: Number of permutation iterations
         feature_selection: Feature type to analyze
         config: Configuration object
-        
+
     Returns:
         list: Results for both RDM and MDS analyses
     """
-    logging.info(f"Processing subject {subject_i}, mask {mask}, feature: {feature_selection}")
-    
+    logging.info(
+        f"Processing subject {subject_i}, mask {mask}, feature: {feature_selection}"
+    )
+
     # Generate RDM if needed
     rand = 0
-    create_rdm(config, [subject_i], mask, f"subj_{subject_i:02d}", t_test_threshold, randomization=True)
+    create_rdm(
+        config,
+        [subject_i],
+        mask,
+        f"subj_{subject_i:02d}",
+        t_test_threshold,
+        randomization=True,
+    )
 
     # Load precomputed MDS coordinates
     X = np.load(
@@ -335,8 +349,8 @@ def run_mantel_test_for_subject_mask(
 
     # Load metadata
     metadata = np.load(
-        f"data/rdm/{set_to_take_rsa}/" 
-        f"subj_{subject_i:02d}/subj_{subject_i:02d}/" 
+        f"data/rdm/{set_to_take_rsa}/"
+        f"subj_{subject_i:02d}/subj_{subject_i:02d}/"
         "metadata.npy"
     )
 
@@ -369,16 +383,16 @@ def run_mantel_test_for_subject_mask(
 def generate_results():
     """
     Generate comprehensive Mantel test results for all subjects, masks, and features.
-    
+
     This function processes all subjects (1-8), extracts ROI masks, and runs
     Mantel tests for all feature types, saving results to an Excel file.
     """
     logging.info("Starting comprehensive Mantel test analysis")
-    
+
     config = load_config("config.yaml")
     results_path = os.path.join(
-        config.directories.output_dir, 
-        config.saved_results_paths.permutation_analysis_excel
+        config.directories.output_dir,
+        config.saved_results_paths.permutation_analysis_excel,
     )
 
     results = []
@@ -387,7 +401,7 @@ def generate_results():
     # Process each subject
     for subj in range(1, 9):
         logging.info(f"Processing subject {subj}")
-        
+
         # Retrieve ROI mask for this subject
         subj_mask = retrieve_roi_mask(config, subj, f"subj_{subj:02d}", False, 3.0)
         mask_values = np.unique(subj_mask).tolist()
@@ -399,17 +413,19 @@ def generate_results():
             for feature_selection in feature_selections:
                 try:
                     r = run_mantel_test_for_subject_mask(
-                        subj, 
-                        mask, 
+                        subj,
+                        mask,
                         f"subj_{subj:02d}",  # set_to_take_rsa
                         3.0,  # t_test_threshold
-                        B=2000, 
+                        B=2000,
                         feature_selection=feature_selection,
-                        config=config
+                        config=config,
                     )
                     results += r
                 except Exception as e:
-                    logging.error(f"Error processing subject {subj}, mask {mask}, feature {feature_selection}: {e}")
+                    logging.error(
+                        f"Error processing subject {subj}, mask {mask}, feature {feature_selection}: {e}"
+                    )
                     continue
 
         # Save intermediate results after each subject
@@ -427,6 +443,7 @@ def generate_results():
 # =========================================================================
 # MAIN EXECUTION
 # =========================================================================
+
 
 def main():
     """Main execution function."""

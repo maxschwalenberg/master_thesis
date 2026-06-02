@@ -19,13 +19,10 @@ class SavedResultsPathsConfig:
     sample_repeatability_correlations_true_excel: str
     sample_repeatability_correlations_null_excel: str
 
-
     spearman_correlations_pickle: str
     spearman_correlations_excel: str
 
     permutation_analysis_excel: str
-
-
 
 
 @dataclass
@@ -180,7 +177,7 @@ class Configuration:
 
     saved_results_paths: SavedResultsPathsConfig
 
-    all_rois: Dict[str, int] 
+    all_rois: Dict[str, int]
 
 
 def load_config(config_file_path: str) -> Configuration:
@@ -196,7 +193,9 @@ def load_config(config_file_path: str) -> Configuration:
         nsd_project=NSDProject(**config_data["nsd_project"]),
         analysis=Analysis(**config_data["analysis"]),
         dataset_validation=DatasetValidation(**config_data["dataset_validation"]),
-        saved_results_paths = SavedResultsPathsConfig(**config_data["saved_results_paths"]),
+        saved_results_paths=SavedResultsPathsConfig(
+            **config_data["saved_results_paths"]
+        ),
         pipeline=PipelineConfig(
             step_1_preprocessing=PreprocessingConfig(
                 **config_data["pipeline"]["step_1_preprocessing"]

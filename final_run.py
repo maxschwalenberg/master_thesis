@@ -1,16 +1,25 @@
 import os
 from utils.config import Configuration, load_config
-from rsa.sample_repeatability import sample_repeatability_distances_data, create_all_rdms, analyze_within_subjects
+from rsa.sample_repeatability import (
+    sample_repeatability_distances_data,
+    create_all_rdms,
+    analyze_within_subjects,
+)
 from rsa.permutation_analysis import run_mantel_test_for_subject_mask
 from gaussian.fit_gaussian import fit_gaussian_params
 from utils.utils import retrieve_roi_mask
-from rsa.cortical_correlation import compute_cortical_distances, compute_mds_distances, compute_correlations
+from rsa.cortical_correlation import (
+    compute_cortical_distances,
+    compute_mds_distances,
+    compute_correlations,
+)
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
 
 # TODO
+
 
 def run():
     config = load_config("config.yaml")
@@ -21,7 +30,6 @@ def run():
 
     t_threshhold = 3
     sigma_threshold = 5
-
 
     sample_repeatability_distances_pickle = os.path.join(
         config.directories.output_dir,
@@ -37,18 +45,16 @@ def run():
         config.saved_results_paths.sample_repeatability_correlations_true_excel,
     )
 
-
     sample_repeatability_correlations_null_excel = os.path.join(
         config.directories.output_dir,
         config.saved_results_paths.sample_repeatability_correlations_null_excel,
     )
 
+    mask_values = [1, 2, 3, 4, 5, 6, 7, 9]
 
-    mask_values = [1,2,3,4,5,6,7,9]
-    
     # 1. sample repeatability
     # approach (2)
-    
+
     # sample_repeatability_distances_data(config, subjects, t_thresh=t_threshhold, mask_values=mask_values)
 
     # approach (1)
@@ -82,11 +88,8 @@ def run():
     # df_obs.to_excel(sample_repeatability_correlations_true_excel)
     # df_null.to_excel(sample_repeatability_correlations_null_excel)
 
-
     # 2. permutation encoding analysis
     # results_path = os.path.join(config.directories.output_dir, config.saved_results_paths.permutation_analysis_excel)
-
-
 
     # results = []
     # for subj in range(1, 9):
@@ -112,7 +115,7 @@ def run():
 
     # df_results = pd.DataFrame(results)
     # df_results.to_excel(results_path)
-    
+
     # # 3. voxel_fits
     # # positively
     # config.directories.gaussian_fit_results_dir = (
@@ -129,30 +132,26 @@ def run():
     #         t_test_threshold=t_threshhold
     #     )
 
-
-    subjects = [1,2,3,4,5,6, 7,8]
+    subjects = [1, 2, 3, 4, 5, 6, 7, 8]
     # mask_values = [2,3,4,5,6,7,9]
-    #subjects = [6, 8]
-
-
-    
+    # subjects = [6, 8]
 
     compute_cortical_distances(config, subjects, rois=mask_values)
 
-
     # if run_mds:
-    config.directories.gaussian_fit_results_dir = (
-        "data/gaussian_results/final_run"
-    )
-    mask_values = [1,2,3,4,5,6,7,9]
-    
-    compute_mds_distances(config, subjects, t_threshhold, rois=mask_values, sigma_threshold=sigma_threshold)
+    config.directories.gaussian_fit_results_dir = "data/gaussian_results/final_run"
+    mask_values = [1, 2, 3, 4, 5, 6, 7, 9]
 
+    compute_mds_distances(
+        config,
+        subjects,
+        t_threshhold,
+        rois=mask_values,
+        sigma_threshold=sigma_threshold,
+    )
 
     # if run_corr:
     compute_correlations(config, subjects, trials=100, rois=mask_values)
-
-
 
 
 if __name__ == "__main__":

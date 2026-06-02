@@ -32,15 +32,16 @@ logging.basicConfig(
 # POSITIVE SET GENERATION (FACE STIMULI)
 # =========================================================================
 
+
 def generate_positive_set(config: Configuration):
     """
     Generate positive stimulus set containing high-quality face images.
-    
+
     This function processes face detection results to create a curated dataset
     of face stimuli. It filters for images with exactly one person and one face
     detection with sufficient area coverage, then sorts by face area to prioritize
     high-quality detections.
-    
+
     Args:
         config: Configuration object containing pipeline settings and paths
     """
@@ -71,7 +72,7 @@ def generate_positive_set(config: Configuration):
         # Format subject identifier
         if nsd_subj_subset != "shared":
             nsd_subj_subset = f"subj_{nsd_subj_subset:02d}"
-        
+
         logging.info(f"Generating face set for subject: {nsd_subj_subset}")
 
         # Create output directory structure
@@ -91,21 +92,25 @@ def generate_positive_set(config: Configuration):
         face_detection_results_path = os.path.join(
             subdir_path, config.face_detection.results_path
         )
-        
+
         if not os.path.exists(face_detection_results_path):
-            logging.error(f"Face detection results not found: {face_detection_results_path}")
+            logging.error(
+                f"Face detection results not found: {face_detection_results_path}"
+            )
             continue
-            
+
         with open(face_detection_results_path, "r") as f:
             detection_results = json.load(f)
 
         # Load base animate subset
-        humans_subset_path = os.path.join(subdir_path, config.dataset_creation.subset_animate)
-        
+        humans_subset_path = os.path.join(
+            subdir_path, config.dataset_creation.subset_animate
+        )
+
         if not os.path.exists(humans_subset_path):
             logging.error(f"Humans subset file not found: {humans_subset_path}")
             continue
-            
+
         humans_subset_excel = pd.read_excel(humans_subset_path)
 
         logging.info(f"Loaded {len(detection_results)} detection results")
@@ -118,19 +123,23 @@ def generate_positive_set(config: Configuration):
 
         # Extract bounding box information from detection results
         for det in detection_results:
-            bboxes.append((
-                det["detection"],           # Bounding box coordinates
-                det["file_name"],          # Image filename
-                det["n_persons_label"],    # Number of persons detected
-                len(det["detection"]),     # Number of face detections
-            ))
+            bboxes.append(
+                (
+                    det["detection"],  # Bounding box coordinates
+                    det["file_name"],  # Image filename
+                    det["n_persons_label"],  # Number of persons detected
+                    len(det["detection"]),  # Number of face detections
+                )
+            )
 
-        logging.info("Filtering for images with exactly 1 person and 1 face of sufficient size")
+        logging.info(
+            "Filtering for images with exactly 1 person and 1 face of sufficient size"
+        )
 
         # Filter detections based on quality criteria
         for i, detection_record in enumerate(bboxes):
             detections, filename, n_persons, n_faces = detection_record
-            
+
             # Process each bounding box in the detection
             for bbox in detections:
                 # Calculate face area
@@ -143,7 +152,9 @@ def generate_positive_set(config: Configuration):
                 # 2. Exactly 1 person detected
                 # 3. Exactly 1 face detected
                 if area_fraction > 0.02 and n_persons == 1 and n_faces == 1:
-                    bbox_image_areas.append((area_fraction, filename, n_persons, n_faces))
+                    bbox_image_areas.append(
+                        (area_fraction, filename, n_persons, n_faces)
+                    )
 
         # Sort by face area (largest first) to prioritize high-quality detections
         sorted_areas = sorted(bbox_image_areas, key=lambda x: x[0], reverse=True)
@@ -151,27 +162,28 @@ def generate_positive_set(config: Configuration):
         # Remove duplicates (keep only the best detection per image)
         seen = set()
         unique_detections = [
-            detection for detection in sorted_areas 
+            detection
+            for detection in sorted_areas
             if detection[1] not in seen and not seen.add(detection[1])
         ]
 
-        logging.info(f"Found {len(unique_detections)} unique high-quality face detections")
+        logging.info(
+            f"Found {len(unique_detections)} unique high-quality face detections"
+        )
 
         # Create result DataFrame
         result_df = pd.DataFrame(columns=humans_subset_excel.columns)
-        
+
         for detection_info in unique_detections:
             area_fraction, filename, n_persons, n_faces = detection_info
-            
+
             # Verify this is a single face detection
             if n_faces == 1:
                 # Find corresponding row in humans subset
                 matching_rows = humans_subset_excel[
-                    humans_subset_excel["file_name"].str.contains(
-                        filename, na=False
-                    )
+                    humans_subset_excel["file_name"].str.contains(filename, na=False)
                 ]
-                
+
                 if not matching_rows.empty:
                     row = matching_rows.iloc[0]
                     result_df = pd.concat(
@@ -182,12 +194,12 @@ def generate_positive_set(config: Configuration):
         result_df = result_df.loc[
             :, ~result_df.columns.str.contains("Unnamed", case=False, na=False)
         ]
-        
+
         output_path = os.path.join(
             subdir_path, config.dataset_creation.subset_animate_face_unchecked
         )
         result_df.to_excel(output_path, index=False)
-        
+
         logging.info(f"Saved {len(result_df)} face stimuli to {output_path}")
 
 
@@ -195,15 +207,16 @@ def generate_positive_set(config: Configuration):
 # NEGATIVE SET GENERATION (NON-FACE ANIMATE STIMULI)
 # =========================================================================
 
+
 def generate_animate_non_face(config: Configuration):
     """
     Generate negative stimulus set containing animate non-face images.
-    
+
     This function creates a dataset of animate stimuli that do not contain
     face detections, serving as a control/contrast set for face analysis.
     It uses set operations to identify images in the animate subset that
     lack face detections.
-    
+
     Args:
         config: Configuration object containing pipeline settings and paths
     """
@@ -234,7 +247,7 @@ def generate_animate_non_face(config: Configuration):
         # Format subject identifier
         if nsd_subj_subset != "shared":
             nsd_subj_subset = f"subj_{int(nsd_subj_subset):02d}"
-        
+
         logging.info(f"Generating animate non-face set for subject: {nsd_subj_subset}")
 
         # Define subject directory path
@@ -246,21 +259,25 @@ def generate_animate_non_face(config: Configuration):
         face_detection_results_path = os.path.join(
             subdir_path, config.face_detection.results_path
         )
-        
+
         if not os.path.exists(face_detection_results_path):
-            logging.error(f"Face detection results not found: {face_detection_results_path}")
+            logging.error(
+                f"Face detection results not found: {face_detection_results_path}"
+            )
             continue
-            
+
         with open(face_detection_results_path, "r") as f:
             detection_results = json.load(f)
 
         # Load base animate subset
-        humans_subset_path = os.path.join(subdir_path, config.dataset_creation.subset_animate)
-        
+        humans_subset_path = os.path.join(
+            subdir_path, config.dataset_creation.subset_animate
+        )
+
         if not os.path.exists(humans_subset_path):
             logging.error(f"Humans subset file not found: {humans_subset_path}")
             continue
-            
+
         humans_subset_excel = pd.read_excel(humans_subset_path)
 
         logging.info(f"Loaded {len(detection_results)} detection results")
@@ -277,7 +294,7 @@ def generate_animate_non_face(config: Configuration):
 
         # Extract all filenames from animate subset
         all_file_names = humans_subset_excel["file_name"].tolist()
-        
+
         # Clean filenames by extracting just the filename part (remove path)
         cleaned_file_names = []
         for filename in all_file_names:
@@ -304,11 +321,9 @@ def generate_animate_non_face(config: Configuration):
         for filename in non_face_set:
             # Find corresponding row in humans subset
             matching_rows = humans_subset_excel[
-                humans_subset_excel["file_name"].str.contains(
-                    filename, na=False
-                )
+                humans_subset_excel["file_name"].str.contains(filename, na=False)
             ]
-            
+
             if not matching_rows.empty:
                 row = matching_rows.iloc[0]
                 result_df = pd.concat(
@@ -325,9 +340,9 @@ def generate_animate_non_face(config: Configuration):
             subdir_path, config.dataset_creation.subset_animate_non_face_unchecked
         )
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
+
         result_df.to_excel(output_path, index=False)
-        
+
         logging.info(f"Saved {len(result_df)} non-face stimuli to {output_path}")
 
 
@@ -335,22 +350,23 @@ def generate_animate_non_face(config: Configuration):
 # MAIN EXECUTION
 # =========================================================================
 
+
 def main():
     """
     Main execution function for dataset creation pipeline.
-    
+
     Runs both positive set generation (faces) and negative set generation
     (animate non-faces) according to configuration settings.
     """
     logging.info("Starting dataset creation pipeline")
-    
+
     # Load configuration
     config = load_config("config.yaml")
-    
+
     # Generate both positive and negative stimulus sets
     generate_animate_non_face(config)
     generate_positive_set(config)
-    
+
     logging.info("Dataset creation pipeline completed")
 
 

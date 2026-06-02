@@ -298,7 +298,6 @@ def adjust_labelled_data(
 
         print()
 
-
     quit()
     missing_nan_information_path = os.path.join(
         config.directories.excel_files_target_dir, subj_to_pick, "missing_nan_info.json"

@@ -33,17 +33,18 @@ logging.basicConfig(
 # COORDINATE TRANSFORMATION FUNCTIONS
 # =========================================================================
 
+
 def cartesian_to_polar_normalized(x: float, y: float) -> tuple[float, float, float]:
     """
     Convert Cartesian coordinates to polar coordinates with normalization.
-    
+
     Transforms (x, y) coordinates to polar representation with radius and
     normalized angle suitable for surface visualization.
-    
+
     Args:
         x: X-coordinate in Cartesian space
         y: Y-coordinate in Cartesian space
-        
+
     Returns:
         tuple: (radius, theta_degrees, theta_normalized) where:
             - radius: Euclidean distance from origin
@@ -52,14 +53,14 @@ def cartesian_to_polar_normalized(x: float, y: float) -> tuple[float, float, flo
     """
     # Compute radius using Euclidean distance
     r = math.hypot(x, y)
-    
+
     # Convert to degrees and wrap to [0, 360) range
     # atan2 returns radians in (-π, π]; convert and normalize
     theta_deg = math.degrees(math.atan2(y, x)) % 360
-    
+
     # Normalize angle to [0, 1) for surface visualization
     theta_norm = theta_deg / 360.0
-    
+
     return r, theta_deg, theta_norm
 
 
@@ -67,16 +68,17 @@ def cartesian_to_polar_normalized(x: float, y: float) -> tuple[float, float, flo
 # DATA LOADING FUNCTIONS
 # =========================================================================
 
+
 def load_excel_files(directory: str) -> pd.DataFrame:
     """
     Load and concatenate all Excel files from a directory into a single DataFrame.
-    
+
     This function searches for Excel files (.xlsx, .xls) in the specified directory,
     loads each file, and combines them into a unified DataFrame for analysis.
-    
+
     Args:
         directory: Path to directory containing Excel files
-        
+
     Returns:
         pd.DataFrame: Combined DataFrame from all Excel files, empty if none found
     """
@@ -110,7 +112,9 @@ def load_excel_files(directory: str) -> pd.DataFrame:
     # Concatenate all DataFrames
     if dfs:
         combined_df = pd.concat(dfs, ignore_index=True)
-        logging.info(f"Combined {len(dfs)} files into DataFrame with {len(combined_df)} total rows")
+        logging.info(
+            f"Combined {len(dfs)} files into DataFrame with {len(combined_df)} total rows"
+        )
         return combined_df
     else:
         logging.warning("No Excel files could be loaded successfully")
@@ -121,14 +125,17 @@ def load_excel_files(directory: str) -> pd.DataFrame:
 # VARIANCE MAP CREATION FUNCTIONS
 # =========================================================================
 
-def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_to_pick: int):
+
+def create_variance_mask(
+    config: Configuration, subj_to_pick_shared: bool, subj_to_pick: int
+):
     """
     Create surface-based variance maps from Gaussian fitting results.
-    
+
     This function processes fitted Gaussian parameters to generate FreeSurfer-compatible
     surface maps for visualization. It creates maps for variance explained, spatial
     position (angle/radius), sigma values, and slope parameters.
-    
+
     Args:
         config: Configuration object containing directory paths
         subj_to_pick_shared: Whether to use shared subject data
@@ -136,12 +143,12 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
     """
     logging.info(f"Creating variance masks for subject {subj_to_pick}")
     logging.info(f"Using shared data: {subj_to_pick_shared}")
-    
+
     # Define processing parameters
     hemis = ["lh", "rh"]
     subset = "shared" if subj_to_pick_shared else f"subj_{subj_to_pick:02d}"
     mask_dir = config.directories.t_test_roi_dir
-    
+
     # Define paths to Gaussian fitting results
     gaussian_results_dir = os.path.join(
         "data/gaussian_results",
@@ -149,7 +156,7 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
         f"subj_{subj_to_pick:02d}",
         f"subj{subj_to_pick:02d}",
     )
-    
+
     gaussian_results_dir_slope = os.path.join(
         "data/gaussian_results",
         "final_run",
@@ -175,18 +182,18 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
 
     # Create lookup dictionaries for O(1) parameter access
     logging.info("Creating parameter lookup dictionaries...")
-    var_train_lookup = dict(
-        zip(results_df["original_index"], results_df["var_train"])
-    )
+    var_train_lookup = dict(zip(results_df["original_index"], results_df["var_train"]))
     pos_x_lookup = dict(zip(results_df["original_index"], results_df["x0"]))
     pos_y_lookup = dict(zip(results_df["original_index"], results_df["y0"]))
     sigma_lookup = dict(zip(results_df["original_index"], results_df["sigma"]))
-    slope_lookup = dict(zip(results_df_slope["original_index"], results_df_slope["slope"]))
+    slope_lookup = dict(
+        zip(results_df_slope["original_index"], results_df_slope["slope"])
+    )
 
     # Validate consistency between datasets
-    assert len(slope_lookup) == len(sigma_lookup), (
-        f"Mismatch in lookup table sizes: slope={len(slope_lookup)}, sigma={len(sigma_lookup)}"
-    )
+    assert len(slope_lookup) == len(
+        sigma_lookup
+    ), f"Mismatch in lookup table sizes: slope={len(slope_lookup)}, sigma={len(sigma_lookup)}"
 
     logging.info(f"Created lookup tables with {len(var_train_lookup)} entries")
 
@@ -194,16 +201,16 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
     vertex_offset = 0
     for hemi in hemis:
         logging.info(f"Processing hemisphere: {hemi}")
-        
+
         # Load hemisphere mask
         mask_path = os.path.join(
             mask_dir, subset, f"{hemi}.subj{subj_to_pick:02d}.final.mgz"
         )
-        
+
         if not os.path.exists(mask_path):
             logging.error(f"Mask file not found: {mask_path}")
             continue
-            
+
         maskdata = nib.load(mask_path).get_fdata().squeeze()
         logging.info(f"Loaded {hemi} mask with {maskdata.shape[0]} vertices")
 
@@ -213,7 +220,7 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
             "angle": np.zeros_like(maskdata),
             "radius": np.zeros_like(maskdata),
             "sigma": np.zeros_like(maskdata),
-            "slope": np.zeros_like(maskdata)
+            "slope": np.zeros_like(maskdata),
         }
 
         # Define output paths for each map type
@@ -222,7 +229,11 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
                 config.nsd_data.freesurfer_dir,
                 f"subj{subj_to_pick:02d}",
                 "label",
-                f"{hemi}.fits_{key}.mgz" if key != "variance" else f"{hemi}.variance_map.mgz"
+                (
+                    f"{hemi}.fits_{key}.mgz"
+                    if key != "variance"
+                    else f"{hemi}.variance_map.mgz"
+                ),
             )
             for key in map_types
         }
@@ -237,11 +248,11 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
             idx = i + vertex_offset
 
             # Retrieve parameters for this vertex
-            vt = var_train_lookup.get(idx)      # Variance explained
-            x0 = pos_x_lookup.get(idx)          # X position
-            y0 = pos_y_lookup.get(idx)          # Y position
-            sig = sigma_lookup.get(idx)         # Sigma parameter
-            slope = slope_lookup.get(idx)       # Slope parameter
+            vt = var_train_lookup.get(idx)  # Variance explained
+            x0 = pos_x_lookup.get(idx)  # X position
+            y0 = pos_y_lookup.get(idx)  # Y position
+            sig = sigma_lookup.get(idx)  # Sigma parameter
+            slope = slope_lookup.get(idx)  # Slope parameter
 
             # Validate slope and sigma consistency
             if idx in sigma_lookup:
@@ -255,8 +266,8 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
             # Process spatial position (convert to polar coordinates)
             if x0 is not None and y0 is not None:
                 r, theta_deg, theta_norm = cartesian_to_polar_normalized(x0, y0)
-                map_types["angle"][i] = theta_norm   # Normalized angle [0,1)
-                map_types["radius"][i] = r           # Radius from origin
+                map_types["angle"][i] = theta_norm  # Normalized angle [0,1)
+                map_types["radius"][i] = r  # Radius from origin
 
             # Process sigma parameter (clamp and normalize to [0,1])
             if sig is not None:
@@ -276,15 +287,17 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
                 map_types["slope"][i] = processed_slope
 
                 # Validate transformation bounds
-                normalized_slope = (max(-10, min(slope, 10)) / 10)
-                assert -1 <= normalized_slope <= 1, f"Slope normalization failed: {normalized_slope}"
+                normalized_slope = max(-10, min(slope, 10)) / 10
+                assert (
+                    -1 <= normalized_slope <= 1
+                ), f"Slope normalization failed: {normalized_slope}"
 
         # Save all maps to FreeSurfer-compatible format
         for key, arr in map_types.items():
             # Create NIfTI image with proper dimensions for FreeSurfer
             img = nib.Nifti1Image(
                 np.expand_dims(arr, axis=(1, 2)),  # Add singleton dimensions
-                np.eye(4)  # Identity affine matrix
+                np.eye(4),  # Identity affine matrix
             )
             nib.save(img, out_paths[key])
             logging.info(f"Saved {key} map to {out_paths[key]}")
@@ -300,24 +313,25 @@ def create_variance_mask(config: Configuration, subj_to_pick_shared: bool, subj_
 # MAIN EXECUTION
 # =========================================================================
 
+
 def main():
     """
     Main execution function for variance mapping.
-    
+
     Loads configuration and creates variance masks for a test subject.
     This can be modified to process multiple subjects or different parameters.
     """
     logging.info("Starting variance mapping pipeline")
-    
+
     # Load configuration
     config = load_config("config.yaml")
-    
+
     # Process subject 1 as example
     # Modify these parameters as needed:
     # - subj_to_pick_shared: False for subject-specific data, True for shared data
     # - subj_to_pick: Subject ID to process
     create_variance_mask(config, subj_to_pick_shared=False, subj_to_pick=1)
-    
+
     logging.info("Variance mapping pipeline completed")
 
 

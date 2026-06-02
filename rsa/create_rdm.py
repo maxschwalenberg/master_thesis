@@ -4,7 +4,7 @@ RDM Creation Module
 This module takes the betas and mask to compute the Representational Dissimilarity Matrix (RDM)
 based on the pdist scipy function.
 
-The RDMs are then stored under the projects directory, and can be accessed later on. 
+The RDMs are then stored under the projects directory, and can be accessed later on.
 Then, we used these RDM (or ones previously computed) to get the corresponding MDS.
 """
 
@@ -39,13 +39,14 @@ logging.basicConfig(
 # UTILITY FUNCTIONS
 # =========================================================================
 
+
 def emd(u, v):
     """
     Custom metric wrapper for Earth Mover's Distance (Wasserstein distance).
-    
+
     Args:
         u, v: Input arrays for distance computation
-        
+
     Returns:
         float: Wasserstein distance between u and v
     """
@@ -55,7 +56,7 @@ def emd(u, v):
 def _make_fname(mask_value, mode, hemisphere, rnd, rnd_offset, sample, suffix):
     """
     Create standardized filename for RDM and MDS outputs.
-    
+
     Args:
         mask_value: ROI mask value
         mode: Analysis mode ("averaged" or "single")
@@ -64,7 +65,7 @@ def _make_fname(mask_value, mode, hemisphere, rnd, rnd_offset, sample, suffix):
         rnd_offset: Random seed offset
         sample: Sample number (for single mode)
         suffix: File suffix ("rdm" or "mds")
-        
+
     Returns:
         str: Formatted filename
     """
@@ -81,6 +82,7 @@ def _make_fname(mask_value, mode, hemisphere, rnd, rnd_offset, sample, suffix):
 # MAIN RDM CREATION FUNCTIONS
 # =========================================================================
 
+
 def create_rdm(
     config: Configuration,
     list_subj,
@@ -91,11 +93,11 @@ def create_rdm(
     sample_to_pick: int = 0,
     randomization: bool = False,
     augment_shared_set: bool = True,
-    randomize_offset: int = 0
+    randomize_offset: int = 0,
 ):
     """
     Create Representational Dissimilarity Matrices (RDMs) and corresponding MDS outputs.
-    
+
     Args:
         config: Configuration object containing directory paths and analysis parameters
         list_subj: List of subject IDs to process
@@ -108,12 +110,19 @@ def create_rdm(
         augment_shared_set: Whether to augment the shared dataset
         randomize_offset: Random seed offset for reproducibility
     """
-    assert mode in ["averaged", "single"], f"Mode must be 'averaged' or 'single', got {mode}"
-    
+    assert mode in [
+        "averaged",
+        "single",
+    ], f"Mode must be 'averaged' or 'single', got {mode}"
+
     logging.info(f"Creating RDM for mode {mode} - T-Test THRESHOLD: {t_test_threshold}")
-    logging.info(f"Using distance-metric={config.pipeline.step_4_rsa_analysis.distance_metric}")
+    logging.info(
+        f"Using distance-metric={config.pipeline.step_4_rsa_analysis.distance_metric}"
+    )
     time.sleep(0.25)
-    logging.info(f"Using positive set: {os.path.join(set_to_take, config.dataset_creation.subset_animate_face_final)}")
+    logging.info(
+        f"Using positive set: {os.path.join(set_to_take, config.dataset_creation.subset_animate_face_final)}"
+    )
 
     # Handle mask_value input formatting
     if isinstance(mask_value, int):
@@ -131,7 +140,7 @@ def create_rdm(
     # Process each subject
     for i, sub in enumerate(list_subj):
         logging.info(f"Processing subject {sub} ({i+1}/{len(list_subj)})")
-        
+
         # Determine if using shared set or not
         pick_shared = set_to_take == "shared"
 
@@ -166,9 +175,9 @@ def create_rdm(
             only_face_set=True,
             randomization=randomization,
             augment_shared_set=augment_shared_set,
-            seed_offset=randomize_offset
+            seed_offset=randomize_offset,
         )
-        
+
         # Validate beta data
         assert not np.isnan(betas).any(), "NaN values found in beta data"
         betas = np.transpose(betas)
@@ -191,7 +200,7 @@ def create_rdm(
             config.directories.rdm_dir, set_to_take, f"subj_{sub:02d}"
         )
         os.makedirs(rdm_dir_subject, exist_ok=True)
-        
+
         metadata_file = os.path.join(rdm_dir_subject, "metadata.npy")
         logging.info(f"Number of image IDs: {len(image_ids)}")
         np.save(metadata_file, image_ids)
@@ -204,20 +213,44 @@ def create_rdm(
 
         # Process each hemisphere
         _process_hemispheres(
-            config, sub, mask_values, combined_mask, mask_lh, mask_rh,
-            betas_both, betas_lh, betas_rh, rdm_dir_subject, mds_dir_subject,
-            mode, sample_to_pick, randomization, randomize_offset
+            config,
+            sub,
+            mask_values,
+            combined_mask,
+            mask_lh,
+            mask_rh,
+            betas_both,
+            betas_lh,
+            betas_rh,
+            rdm_dir_subject,
+            mds_dir_subject,
+            mode,
+            sample_to_pick,
+            randomization,
+            randomize_offset,
         )
 
 
 def _process_hemispheres(
-    config, sub, mask_values, combined_mask, mask_lh, mask_rh,
-    betas_both, betas_lh, betas_rh, rdm_dir_subject, mds_dir_subject,
-    mode, sample_to_pick, randomization, randomize_offset
+    config,
+    sub,
+    mask_values,
+    combined_mask,
+    mask_lh,
+    mask_rh,
+    betas_both,
+    betas_lh,
+    betas_rh,
+    rdm_dir_subject,
+    mds_dir_subject,
+    mode,
+    sample_to_pick,
+    randomization,
+    randomize_offset,
 ):
     """
     Process RDM creation for all hemispheres (both, lh, rh).
-    
+
     Args:
         config: Configuration object
         sub: Subject ID
@@ -228,7 +261,7 @@ def _process_hemispheres(
         mode, sample_to_pick, randomization, randomize_offset: Analysis parameters
     """
     hemispheres = ["both", "lh", "rh"]
-    
+
     for hemisphere in hemispheres:
         # Select appropriate mask and beta data for current hemisphere
         if hemisphere == "both":
@@ -246,20 +279,38 @@ def _process_hemispheres(
         # Process each mask value
         for mask_value in mask_values:
             _process_single_mask(
-                config, sub, mask_value, hemisphere, current_mask, current_betas,
-                rdm_dir_subject, mds_dir_subject, mode, sample_to_pick,
-                randomization, randomize_offset
+                config,
+                sub,
+                mask_value,
+                hemisphere,
+                current_mask,
+                current_betas,
+                rdm_dir_subject,
+                mds_dir_subject,
+                mode,
+                sample_to_pick,
+                randomization,
+                randomize_offset,
             )
 
 
 def _process_single_mask(
-    config, sub, mask_value, hemisphere, current_mask, current_betas,
-    rdm_dir_subject, mds_dir_subject, mode, sample_to_pick,
-    randomization, randomize_offset
+    config,
+    sub,
+    mask_value,
+    hemisphere,
+    current_mask,
+    current_betas,
+    rdm_dir_subject,
+    mds_dir_subject,
+    mode,
+    sample_to_pick,
+    randomization,
+    randomize_offset,
 ):
     """
     Process RDM creation for a single mask value and hemisphere.
-    
+
     Args:
         config: Configuration object
         sub: Subject ID
@@ -280,14 +331,8 @@ def _process_single_mask(
         sample=sample_to_pick,
     )
 
-    rdm_file = os.path.join(
-        rdm_dir_subject,
-        _make_fname(**base_kwargs, suffix="rdm")
-    )
-    mds_file = os.path.join(
-        mds_dir_subject,
-        _make_fname(**base_kwargs, suffix="mds")
-    )
+    rdm_file = os.path.join(rdm_dir_subject, _make_fname(**base_kwargs, suffix="rdm"))
+    mds_file = os.path.join(mds_dir_subject, _make_fname(**base_kwargs, suffix="mds"))
 
     # Apply mask to beta values
     masked_voxels = current_mask == mask_value
@@ -340,23 +385,23 @@ def _process_single_mask(
     rdm_loaded = np.load(rdm_file, allow_pickle=True).astype(np.float32)
     mds_out = mds(rdm_loaded).astype(np.float32)
     logging.info(f"MDS output shape for hemisphere '{hemisphere}': {mds_out.shape}")
-    
+
     np.save(mds_file, mds_out)
     logging.info(f"Saved MDS output to {mds_file}")
 
 
 def rdm_mds_from_betas(
-    config: Configuration, 
-    betas, 
-    combined_mask, 
-    mask_size_lh, 
-    hemis: list[str], 
-    sub: int, 
-    mask_value: int
+    config: Configuration,
+    betas,
+    combined_mask,
+    mask_size_lh,
+    hemis: list[str],
+    sub: int,
+    mask_value: int,
 ):
     """
     Create RDM and MDS directly from beta values without saving to disk.
-    
+
     Args:
         config: Configuration object
         betas: Beta coefficient data
@@ -365,7 +410,7 @@ def rdm_mds_from_betas(
         hemis: List of hemispheres to process
         sub: Subject ID
         mask_value: ROI mask value to analyze
-        
+
     Returns:
         tuple: (rdms, mdss) dictionaries with hemisphere keys
     """
@@ -411,7 +456,7 @@ def rdm_mds_from_betas(
 
         # Process the single mask value
         assert len(mask_values) == 1, "This function expects exactly one mask value"
-        
+
         for mask_val in mask_values:
             masked_voxels = current_mask == mask_val
             masked_betas = current_betas[masked_voxels, :]
@@ -450,7 +495,9 @@ def rdm_mds_from_betas(
 
             # Compute RDM
             rdm = pdist(X, metric=metric_to_use)
-            logging.info(f"Computed RDM shape for hemisphere '{hemisphere}': {rdm.shape}")
+            logging.info(
+                f"Computed RDM shape for hemisphere '{hemisphere}': {rdm.shape}"
+            )
 
             if np.any(np.isnan(rdm)):
                 raise ValueError("NaN values found in RDM")
@@ -472,13 +519,13 @@ def rdm_mds_from_betas(
 if __name__ == "__main__":
     # Example usage (commented out)
     pass
-    
+
     # Example usage:
     # for subj_id in range(1, 9):
     #     set_to_take = f"subj_{subj_id:02d}"
     #     config = load_config("config.yaml")
     #     mask_values = list(config.analysis.rois_to_analyze.values())
-    #     
+    #
     #     for mask_value in mask_values:
     #         try:
     #             n_samples = 3

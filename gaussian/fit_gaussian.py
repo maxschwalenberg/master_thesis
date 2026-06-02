@@ -38,8 +38,6 @@ logging.basicConfig(
 )
 
 
-
-
 def find_positive_percentile(series):
     # Remove missing values and sort the series
     sorted_series = series.dropna().sort_values().reset_index(drop=True)
@@ -267,9 +265,15 @@ class Gaussian2DFitter:
 
             # In case all three attempts fail, use a fallback set of parameters.
             if not solved:
-                pcov = np.zeros((5,5))
+                pcov = np.zeros((5, 5))
                 if self.use_mixed_slope:
-                    candidate_params = [np.mean(target_values_train).item(), 0, 0, 100, 0]
+                    candidate_params = [
+                        np.mean(target_values_train).item(),
+                        0,
+                        0,
+                        100,
+                        0,
+                    ]
                 else:
                     if self.use_negative_slope:
                         candidate_params = [
@@ -479,7 +483,6 @@ class Gaussian2DFitter:
 
         return noise_ceiling_variance
 
-
     def linearly_rescale_gaussian(self, voxel_activity_test):
         """
         Linearly rescales the Gaussian fit to match the amplitude and offset of the test data.
@@ -539,8 +542,6 @@ class Gaussian2DFitter:
 
         rescaled_slope, x0, y0, sigma, rescaled_intercept = popt
 
-        
-
         # Return the updated parameters with unchanged x0, y0, and sigma
         return [rescaled_slope, x0, y0, sigma, rescaled_intercept]
 
@@ -575,7 +576,7 @@ def fit_gaussian_params(
     set_to_take: str,
     use_negative_slope: bool = False,
     use_mixed_slope: bool = False,
-    t_test_threshold: float = 3.0
+    t_test_threshold: float = 3.0,
 ):
 
     rois = config.analysis.rois_to_analyze
@@ -598,7 +599,7 @@ def fit_gaussian_params(
         "model_performance_non_rescaled",
         "rescaled_slope",
         "rescaled_intercept",
-        "original_index"
+        "original_index",
     ]
 
     randomization = True
@@ -642,7 +643,6 @@ def fit_gaussian_params(
             randomization=randomization,
             seed_offset=randomize_offset,
         )
-        
 
         if np.isnan(betas).any():
             raise ValueError("Found NaNs")
@@ -669,8 +669,7 @@ def fit_gaussian_params(
             )
 
             pcov_results_file = os.path.join(
-                gaussian_fit_result_dir_path,
-                f"pcov_{roi_mask_value}.pkl"
+                gaussian_fit_result_dir_path, f"pcov_{roi_mask_value}.pkl"
             )
 
             pcov_results = []
@@ -694,8 +693,6 @@ def fit_gaussian_params(
                     )
 
                 mds_paths.append(mds_file)
-
-            
 
             mask_voxel_indices = filter_roi_mask(roi_mask_value, mask)
             mask_voxel_indices = mask_voxel_indices[0]
@@ -732,7 +729,9 @@ def fit_gaussian_params(
                             use_mixed_slope=use_mixed_slope,
                         )
 
-                        popt, solved, pcov = fitter.fit(x_samples, y_samples, voxel_activity, voxel_activity_test)
+                        popt, solved, pcov = fitter.fit(
+                            x_samples, y_samples, voxel_activity, voxel_activity_test
+                        )
 
                         A, x0, y0, sigma, intercept = popt
                         slope = A
@@ -755,18 +754,13 @@ def fit_gaussian_params(
                             np.nan,  # model_performance_non_rescaled
                             np.nan,  # rescaled_slope
                             np.nan,  # rescaled_intercept
-                            voxel_i
+                            voxel_i,
                         ]
                         fits_roi.loc[len(fits_roi)] = voxel_fit
                         pcov_results.append(
-                            {
-                                "hemi":hemi,
-                                "original_index" : voxel_i,
-                                "pcov" : pcov
-                            }
+                            {"hemi": hemi, "original_index": voxel_i, "pcov": pcov}
                         )
                         # fits_roi.loc[voxel_i] = voxel_fit
-
 
                     if iteration % 200 == 0:
                         fits_roi.to_excel(gaussian_result_file_path, index=False)
@@ -775,8 +769,6 @@ def fit_gaussian_params(
                         with open(pcov_results_file, "wb") as f:
                             pickle.dump(pcov_results, f)
 
-
-                
                 fits_roi.to_excel(gaussian_result_file_path, index=False)
 
                 # Save to file
@@ -789,7 +781,6 @@ def fit_gaussian_params(
                 if col not in fits_roi.columns:
                     fits_roi[col] = np.nan
 
-           
             # Recalculate metrics for all voxels
             logging.info("Recalculating metrics for all voxels...")
             for index, row in tqdm(
@@ -922,6 +913,3 @@ def fit_gaussian_params(
 
             fits_roi.to_excel(gaussian_result_file_path, index=False)
             logging.info(f"Updated results saved to {gaussian_result_file_path}")
-
-
-
